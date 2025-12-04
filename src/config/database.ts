@@ -26,64 +26,31 @@
 // };
 
 // src/config/database.ts
-// import mysql from 'mysql2/promise';
-// import dotenv from 'dotenv';
-
-// dotenv.config();
-
-// export let pool: mysql.Pool;
-
-// export const connectDB = async () => {
-//   if (pool) return pool; // already created
-
-//   pool = mysql.createPool({
-//     host: process.env.MYSQLHOST,
-//     user: process.env.MYSQLUSER,
-//     password: process.env.MYSQLPASSWORD,
-//     database: process.env.MYSQLDATABASE,
-//     port: Number(process.env.MYSQLPORT) || 3306,
-//     waitForConnections: true,
-//     connectionLimit: 10,
-//     queueLimit: 0,
-//   });
-
-//   // Test connection
-//   const [rows] = await pool.query('SELECT 1 + 1 AS result');
-//   console.log('DB Test Result:', rows);
-
-//   console.log('✅ MySQL connected');
-//   return pool;
-// };
-
-/// DATABASE CHANGED for hosting
-
-// src/config/database.ts
-// src/config/database.ts
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || process.env.MYSQLHOST,
-  port: Number(process.env.DB_PORT || process.env.MYSQLPORT || 3306),
-  user: process.env.DB_USER || process.env.MYSQLUSER,
-  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD,
-  database: process.env.DB_NAME || process.env.MYSQLDATABASE,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+export let pool: mysql.Pool;
 
 export const connectDB = async () => {
-  try {
-    const conn = await pool.getConnection();
-    console.log('✅ MySQL connected');
-    conn.release();
-  } catch (err) {
-    console.error('❌ MySQL connection error:', err);
-    throw err; // will be caught in startServer
-  }
-};
+  if (pool) return pool; // already created
 
-export default pool;
+  pool = mysql.createPool({
+    host: process.env.MYSQLHOST,
+    user: process.env.MYSQLUSER,
+    password: process.env.MYSQLPASSWORD,
+    database: process.env.MYSQLDATABASE,
+    port: Number(process.env.MYSQLPORT) || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+  });
+
+  // Test connection
+  const [rows] = await pool.query('SELECT 1 + 1 AS result');
+  console.log('DB Test Result:', rows);
+
+  console.log('✅ MySQL connected');
+  return pool;
+};
