@@ -26,6 +26,40 @@
 // };
 
 // src/config/database.ts
+// import mysql from 'mysql2/promise';
+// import dotenv from 'dotenv';
+
+// dotenv.config();
+
+// export let pool: mysql.Pool;
+
+// export const connectDB = async () => {
+//   if (pool) return pool; // already created
+
+//   pool = mysql.createPool({
+//     host: process.env.MYSQLHOST,
+//     user: process.env.MYSQLUSER,
+//     password: process.env.MYSQLPASSWORD,
+//     database: process.env.MYSQLDATABASE,
+//     port: Number(process.env.MYSQLPORT) || 3306,
+//     waitForConnections: true,
+//     connectionLimit: 10,
+//     queueLimit: 0,
+//   });
+
+//   // Test connection
+//   const [rows] = await pool.query('SELECT 1 + 1 AS result');
+//   console.log('DB Test Result:', rows);
+
+//   console.log('✅ MySQL connected');
+//   return pool;
+// };
+
+
+
+/// DATABASE CHANGED for hosting
+
+// src/config/database.ts
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
@@ -34,23 +68,35 @@ dotenv.config();
 export let pool: mysql.Pool;
 
 export const connectDB = async () => {
-  if (pool) return pool; // already created
+  if (pool) return pool;
 
-  pool = mysql.createPool({
+  console.log('DB ENV VALUES:', {
     host: process.env.MYSQLHOST,
+    port: process.env.MYSQLPORT,
     user: process.env.MYSQLUSER,
-    password: process.env.MYSQLPASSWORD,
-    database: process.env.MYSQLDATABASE,
-    port: Number(process.env.MYSQLPORT) || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+    db: process.env.MYSQLDATABASE,
   });
 
-  // Test connection
-  const [rows] = await pool.query('SELECT 1 + 1 AS result');
-  console.log('DB Test Result:', rows);
+  try {
+    pool = mysql.createPool({
+      host: process.env.MYSQLHOST,
+      user: process.env.MYSQLUSER,
+      password: process.env.MYSQLPASSWORD,
+      database: process.env.MYSQLDATABASE,
+      port: Number(process.env.MYSQLPORT) || 3306,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      // uncomment if Railway requires SSL:
+      // ssl: { rejectUnauthorized: false },
+    });
 
-  console.log('✅ MySQL connected');
-  return pool;
+    const [rows] = await pool.query('SELECT 1 + 1 AS result');
+    console.log('DB Test Result:', rows);
+    console.log('✅ MySQL connected');
+    return pool;
+  } catch (err) {
+    console.error('❌ MySQL connection error:', err);
+    throw err; // this is what you see as "Failed to start server"
+  }
 };
