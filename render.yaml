@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: lotto-pro-api
+    env: node
+    plan: free
+    region: oregon
+    branch: master
+
+    buildCommand: 'npm install'
+    startCommand: 'node index.js'
+
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
