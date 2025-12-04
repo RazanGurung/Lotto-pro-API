@@ -31,26 +31,27 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export let pool: mysql.Pool;
+const pool = mysql.createPool({
+  host: process.env.MYSQLHOST,
+  port: Number(process.env.MYSQLPORT || 3306),
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLDATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
 export const connectDB = async () => {
-  if (pool) return pool; // already created
-
-  pool = mysql.createPool({
-    host: process.env.MYSQLHOST,
-    user: process.env.MYSQLUSER,
-    password: process.env.MYSQLPASSWORD,
-    database: process.env.MYSQLDATABASE,
-    port: Number(process.env.MYSQLPORT) || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-  });
-
-  // Test connection
-  const [rows] = await pool.query('SELECT 1 + 1 AS result');
-  console.log('DB Test Result:', rows);
-
-  console.log('✅ MySQL connected');
-  return pool;
+  try {
+    const conn = await pool.getConnection();
+    await conn.query('SELECT 1'); // simple test
+    conn.release();
+    console.log('✅ MySQL connected');
+  } catch (err) {
+    console.error('❌ MySQL connection error:', err);
+    throw err;
+  }
 };
+
+export default pool;
