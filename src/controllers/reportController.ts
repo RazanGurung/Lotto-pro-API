@@ -9,7 +9,7 @@ export const getStoreReport = async (req: AuthRequest, res: Response): Promise<v
 
     // Verify store ownership
     const [storeCheck] = await pool.query(
-      'SELECT * FROM stores WHERE store_id = ? AND owner_id = ?',
+      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 
@@ -110,7 +110,7 @@ export const getLotteryReport = async (req: AuthRequest, res: Response): Promise
 
     // Verify store ownership
     const [storeCheck] = await pool.query(
-      'SELECT * FROM stores WHERE store_id = ? AND owner_id = ?',
+      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 
@@ -189,7 +189,7 @@ export const getSalesAnalytics = async (req: AuthRequest, res: Response): Promis
 
     // Verify store ownership
     const [storeCheck] = await pool.query(
-      'SELECT * FROM stores WHERE store_id = ? AND owner_id = ?',
+      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 

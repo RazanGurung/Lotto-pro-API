@@ -34,7 +34,7 @@ export const storeAccountLogin = async (
         owner_id,
         lottery_ac_no,
         lottery_pw
-       FROM stores WHERE lottery_ac_no = ?`,
+       FROM STORES WHERE lottery_ac_no = ?`,
       [lottery_ac_no]
     );
 

@@ -234,7 +234,7 @@ export const getProfile = async (
           contact_number,
           lottery_ac_no,
           created_at
-        FROM stores WHERE store_id = ?`,
+        FROM STORES WHERE store_id = ?`,
         [user.id]
       );
 
@@ -369,7 +369,7 @@ export const deleteStoreOwnerAccount = async (
     await connection.beginTransaction();
 
     const [stores] = await connection.query(
-      'SELECT store_id FROM stores WHERE owner_id = ?',
+      'SELECT store_id FROM STORES WHERE owner_id = ?',
       [user.id]
     );
 
@@ -405,7 +405,7 @@ export const deleteStoreOwnerAccount = async (
       );
 
       await connection.query(
-        `DELETE FROM stores WHERE store_id IN (${storePlaceholders}) AND owner_id = ?`,
+        `DELETE FROM STORES WHERE store_id IN (${storePlaceholders}) AND owner_id = ?`,
         [...storeIds, user.id]
       );
     }

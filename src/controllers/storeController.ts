@@ -22,7 +22,7 @@ export const getStores = async (req: AuthRequest, res: Response): Promise<void> 
         s.created_at,
         COUNT(DISTINCT sli.id) as lottery_count,
         COALESCE(SUM(sli.current_count), 0) as total_active_tickets
-      FROM stores s
+      FROM STORES s
       LEFT JOIN store_lottery_inventory sli ON s.store_id = sli.store_id
       WHERE s.owner_id = ?
       GROUP BY s.store_id
@@ -54,7 +54,7 @@ export const getStoreById = async (req: AuthRequest, res: Response): Promise<voi
         contact_number,
         lottery_ac_no,
         created_at
-      FROM stores WHERE store_id = ? AND owner_id = ?`,
+      FROM STORES WHERE store_id = ? AND owner_id = ?`,
       [storeId, userId]
     );
 
@@ -102,7 +102,7 @@ export const createStore = async (req: AuthRequest, res: Response): Promise<void
     }
 
     const [existing] = await pool.query(
-      'SELECT store_id FROM stores WHERE lottery_ac_no = ?',
+      'SELECT store_id FROM STORES WHERE lottery_ac_no = ?',
       [lottery_ac_no]
     );
 
@@ -114,7 +114,7 @@ export const createStore = async (req: AuthRequest, res: Response): Promise<void
     const hashedLotteryPassword = await hashPassword(lottery_pw);
 
     const [storeResult] = await pool.query(
-      `INSERT INTO stores
+      `INSERT INTO STORES
         (owner_id, store_name, address, city, state, zipcode, contact_number, lottery_ac_no, lottery_pw)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -144,7 +144,7 @@ export const createStore = async (req: AuthRequest, res: Response): Promise<void
         contact_number,
         lottery_ac_no,
         created_at
-      FROM stores WHERE store_id = ?`,
+      FROM STORES WHERE store_id = ?`,
       [storeId]
     );
     const store = (stores as any[])[0];
@@ -189,7 +189,7 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
     } = req.body;
 
     const [checkResult] = await pool.query(
-      'SELECT * FROM stores WHERE store_id = ? AND owner_id = ?',
+      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 
@@ -205,7 +205,7 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
       }
 
       const [existing] = await pool.query(
-        'SELECT store_id FROM stores WHERE lottery_ac_no = ? AND store_id != ?',
+        'SELECT store_id FROM STORES WHERE lottery_ac_no = ? AND store_id != ?',
         [lottery_ac_no, storeId]
       );
 
@@ -265,7 +265,7 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
     updates.push('updated_at = CURRENT_TIMESTAMP');
 
     await pool.query(
-      `UPDATE stores SET ${updates.join(', ')} WHERE store_id = ? AND owner_id = ?`,
+      `UPDATE STORES SET ${updates.join(', ')} WHERE store_id = ? AND owner_id = ?`,
       [...values, storeId, userId]
     );
 
@@ -282,7 +282,7 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
         lottery_ac_no,
         created_at,
         updated_at
-      FROM stores WHERE store_id = ?`,
+      FROM STORES WHERE store_id = ?`,
       [storeId]
     );
 
@@ -321,7 +321,7 @@ export const deleteStore = async (req: AuthRequest, res: Response): Promise<void
     await pool.query('DELETE FROM scanned_tickets WHERE store_id = ?', [storeId]);
 
     const [result] = await pool.query(
-      'DELETE FROM stores WHERE store_id = ? AND owner_id = ?',
+      'DELETE FROM STORES WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 
