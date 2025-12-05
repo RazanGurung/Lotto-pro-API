@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/database';
 import { hashPassword, comparePassword, generateToken } from '../utils/auth';
-import { LoginRequest, RegisterRequest, User } from '../models/types';
+import { LoginRequest, RegisterRequest, SuperAdmin } from '../models/types';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -67,6 +67,16 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 };
 
 /// LOGIN
+const SUPER_ADMIN_DOMAIN =
+  (process.env.SUPER_ADMIN_DOMAIN || '@lottopro.com').toLowerCase();
+
+const isSuperAdminEmail = (email: string): boolean => {
+  const normalized = email.toLowerCase();
+  return SUPER_ADMIN_DOMAIN.startsWith('@')
+    ? normalized.endsWith(SUPER_ADMIN_DOMAIN)
+    : normalized.endsWith(`@${SUPER_ADMIN_DOMAIN}`);
+};
+
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password }: LoginRequest = req.body;
@@ -74,6 +84,47 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     // Validate input
     if (!email || !password) {
       res.status(400).json({ error: 'Email and password are required' });
+      return;
+    }
+
+    if (isSuperAdminEmail(email)) {
+      const [admins] = await pool.query(
+        'SELECT * FROM SUPER_ADMIN WHERE email = ?',
+        [email]
+      );
+
+      if ((admins as SuperAdmin[]).length === 0) {
+        res.status(401).json({ error: 'Invalid email or password' });
+        return;
+      }
+
+      const admin = (admins as SuperAdmin[])[0];
+      const isValidPassword = await comparePassword(password, admin.password);
+
+      if (!isValidPassword) {
+        res.status(401).json({ error: 'Invalid email or password' });
+        return;
+      }
+
+      const token = generateToken({
+        id: admin.super_admin_id,
+        email: admin.email,
+        full_name: admin.name,
+        role: 'super_admin',
+      });
+
+      res.status(200).json({
+        role: 'super_admin',
+        admin: {
+          id: admin.super_admin_id,
+          name: admin.name,
+          email: admin.email,
+          created_at: admin.created_at,
+        },
+        token,
+        redirectTo: '/api/super-admin/profile',
+        message: 'Super admin login successful',
+      });
       return;
     }
 
@@ -128,8 +179,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     };
 
     res.status(200).json({
+      role: 'store_owner',
       user: userResponse,
       token,
+      redirectTo: '/api/auth/profile',
       message: 'Login successful',
     });
   } catch (error) {
