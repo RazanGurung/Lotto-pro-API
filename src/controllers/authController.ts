@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { pool } from '../config/database';
 import { hashPassword, comparePassword, generateToken } from '../utils/auth';
 import { LoginRequest, RegisterRequest, SuperAdmin } from '../models/types';
+import { AuthRequest } from '../middleware/auth';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -193,23 +194,49 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const getProfile = async (
-  req: Request,
+  req: AuthRequest,
   res: Response
 ): Promise<void> => {
   try {
-    const userId = (req as any).user.id;
+    const user = req.user;
 
-    const [result] = await pool.query(
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (user.role === 'super_admin') {
+      const [admins] = await pool.query(
+        'SELECT super_admin_id as id, name, email, created_at FROM SUPER_ADMIN WHERE super_admin_id = ?',
+        [user.id]
+      );
+
+      if ((admins as any[]).length === 0) {
+        res.status(404).json({ error: 'Super admin not found' });
+        return;
+      }
+
+      res.status(200).json({
+        role: 'super_admin',
+        admin: (admins as any[])[0],
+      });
+      return;
+    }
+
+    const [owners] = await pool.query(
       'SELECT owner_id as id, name as full_name, email, phone, created_at FROM STORE_OWNER WHERE owner_id = ?',
-      [userId]
+      [user.id]
     );
 
-    if ((result as any[]).length === 0) {
+    if ((owners as any[]).length === 0) {
       res.status(404).json({ error: 'Store owner not found' });
       return;
     }
 
-    res.status(200).json({ user: (result as any[])[0] });
+    res.status(200).json({
+      role: 'store_owner',
+      user: (owners as any[])[0],
+    });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Server error' });
