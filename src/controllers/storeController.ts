@@ -91,6 +91,16 @@ export const createStore = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
+    if (!isValidLotteryAccountNumber(lottery_ac_no)) {
+      res.status(400).json({ error: 'Lottery account number must be 8 digits' });
+      return;
+    }
+
+    if (!isValidLotteryPin(lottery_pw)) {
+      res.status(400).json({ error: 'Lottery password must be 4 digits' });
+      return;
+    }
+
     const [existing] = await pool.query(
       'SELECT store_id FROM stores WHERE lottery_ac_no = ?',
       [lottery_ac_no]
@@ -189,6 +199,11 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
     }
 
     if (lottery_ac_no) {
+      if (!isValidLotteryAccountNumber(lottery_ac_no)) {
+        res.status(400).json({ error: 'Lottery account number must be 8 digits' });
+        return;
+      }
+
       const [existing] = await pool.query(
         'SELECT store_id FROM stores WHERE lottery_ac_no = ? AND store_id != ?',
         [lottery_ac_no, storeId]
@@ -232,6 +247,11 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
       values.push(lottery_ac_no);
     }
     if (lottery_pw) {
+      if (!isValidLotteryPin(lottery_pw)) {
+        res.status(400).json({ error: 'Lottery password must be 4 digits' });
+        return;
+      }
+
       const hashedLotteryPassword = await hashPassword(lottery_pw);
       updates.push('lottery_pw = ?');
       values.push(hashedLotteryPassword);
@@ -316,3 +336,7 @@ export const deleteStore = async (req: AuthRequest, res: Response): Promise<void
     res.status(500).json({ error: 'Server error' });
   }
 };
+const isValidLotteryAccountNumber = (value: string): boolean =>
+  /^\d{8}$/.test(value);
+
+const isValidLotteryPin = (value: string): boolean => /^\d{4}$/.test(value);

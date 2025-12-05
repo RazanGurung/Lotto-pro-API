@@ -17,6 +17,16 @@ export const storeAccountLogin = async (
       return;
     }
 
+    if (!/^\d{8}$/.test(lottery_ac_no)) {
+      res.status(400).json({ error: 'Lottery account number must be 8 digits' });
+      return;
+    }
+
+    if (!/^\d{4}$/.test(lottery_pw)) {
+      res.status(400).json({ error: 'Lottery password must be 4 digits' });
+      return;
+    }
+
     const [stores] = await pool.query(
       `SELECT
         store_id,
