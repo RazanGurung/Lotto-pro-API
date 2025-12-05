@@ -91,12 +91,9 @@ export const createStore = async (
     }: CreateStoreRequest = req.body;
 
     if (!store_name || !lottery_ac_no || !lottery_pw) {
-      res
-        .status(400)
-        .json({
-          error:
-            'Store name, lottery account number, and password are required',
-        });
+      res.status(400).json({
+        error: 'Store name, lottery account number, and password are required',
+      });
       return;
     }
 
@@ -165,7 +162,7 @@ export const createStore = async (
 
     const inventoryPromises = (lotteryTypesResult as any[]).map((lt) =>
       pool.query(
-        'INSERT INTO store_lottery_book (store_id, lottery_type_id, total_count, current_count) VALUES (?, ?, ?, ?)',
+        'INSERT INTO STORE_LOTTERY_BOOK (store_id, lottery_type_id, total_count, current_count) VALUES (?, ?, ?, ?)',
         [store.id, lt.lottery_id, 100, 100]
       )
     );
