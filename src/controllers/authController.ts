@@ -221,6 +221,34 @@ export const getProfile = async (
       return;
     }
 
+    if (user.role === 'store_account') {
+      const [stores] = await pool.query(
+        `SELECT
+          store_id as id,
+          owner_id,
+          store_name,
+          address,
+          city,
+          state,
+          zipcode,
+          contact_number,
+          lottery_ac_no,
+          created_at
+        FROM stores WHERE store_id = ?`,
+        [user.id]
+      );
+
+      if ((stores as any[]).length === 0) {
+        res.status(404).json({ error: 'Store not found' });
+        return;
+      }
+
+      res.status(200).json({
+        store: (stores as any[])[0],
+      });
+      return;
+    }
+
     const [owners] = await pool.query(
       'SELECT owner_id as id, name as full_name, email, phone, created_at FROM STORE_OWNER WHERE owner_id = ?',
       [user.id]
@@ -341,11 +369,11 @@ export const deleteStoreOwnerAccount = async (
     await connection.beginTransaction();
 
     const [stores] = await connection.query(
-      'SELECT id FROM stores WHERE owner_id = ?',
+      'SELECT store_id FROM stores WHERE owner_id = ?',
       [user.id]
     );
 
-    const storeIds = (stores as any[]).map((store) => store.id);
+    const storeIds = (stores as any[]).map((store) => store.store_id);
 
     if (storeIds.length > 0) {
       const storePlaceholders = storeIds.map(() => '?').join(', ');
@@ -377,7 +405,7 @@ export const deleteStoreOwnerAccount = async (
       );
 
       await connection.query(
-        `DELETE FROM stores WHERE id IN (${storePlaceholders}) AND owner_id = ?`,
+        `DELETE FROM stores WHERE store_id IN (${storePlaceholders}) AND owner_id = ?`,
         [...storeIds, user.id]
       );
     }

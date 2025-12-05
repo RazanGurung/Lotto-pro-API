@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { CreateStoreRequest } from '../models/types';
+import { hashPassword } from '../utils/auth';
 
 export const getStores = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -9,13 +10,22 @@ export const getStores = async (req: AuthRequest, res: Response): Promise<void> 
 
     const [result] = await pool.query(
       `SELECT
-        s.*,
+        s.store_id as id,
+        s.owner_id,
+        s.store_name,
+        s.address,
+        s.city,
+        s.state,
+        s.zipcode,
+        s.contact_number,
+        s.lottery_ac_no,
+        s.created_at,
         COUNT(DISTINCT sli.id) as lottery_count,
         COALESCE(SUM(sli.current_count), 0) as total_active_tickets
       FROM stores s
-      LEFT JOIN store_lottery_inventory sli ON s.id = sli.store_id
-      WHERE s.owner_id = ? AND s.active = true
-      GROUP BY s.id
+      LEFT JOIN store_lottery_inventory sli ON s.store_id = sli.store_id
+      WHERE s.owner_id = ?
+      GROUP BY s.store_id
       ORDER BY s.created_at DESC`,
       [userId]
     );
@@ -33,7 +43,18 @@ export const getStoreById = async (req: AuthRequest, res: Response): Promise<voi
     const storeId = parseInt(req.params.id);
 
     const [result] = await pool.query(
-      'SELECT * FROM stores WHERE id = ? AND owner_id = ?',
+      `SELECT
+        store_id as id,
+        owner_id,
+        store_name,
+        address,
+        city,
+        state,
+        zipcode,
+        contact_number,
+        lottery_ac_no,
+        created_at
+      FROM stores WHERE store_id = ? AND owner_id = ?`,
       [storeId, userId]
     );
 
@@ -52,23 +73,70 @@ export const getStoreById = async (req: AuthRequest, res: Response): Promise<voi
 export const createStore = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    const { name, address, phone }: CreateStoreRequest = req.body;
+    const {
+      store_name,
+      address,
+      city,
+      state,
+      zipcode,
+      contact_number,
+      lottery_ac_no,
+      lottery_pw,
+    }: CreateStoreRequest = req.body;
 
-    if (!name || !address) {
-      res.status(400).json({ error: 'Name and address are required' });
+    if (!store_name || !lottery_ac_no || !lottery_pw) {
+      res
+        .status(400)
+        .json({ error: 'Store name, lottery account number, and password are required' });
       return;
     }
 
-    // Insert store
+    const [existing] = await pool.query(
+      'SELECT store_id FROM stores WHERE lottery_ac_no = ?',
+      [lottery_ac_no]
+    );
+
+    if ((existing as any[]).length > 0) {
+      res.status(400).json({ error: 'Lottery account number already exists' });
+      return;
+    }
+
+    const hashedLotteryPassword = await hashPassword(lottery_pw);
+
     const [storeResult] = await pool.query(
-      'INSERT INTO stores (owner_id, name, address, phone) VALUES (?, ?, ?, ?)',
-      [userId, name, address, phone || null]
+      `INSERT INTO stores
+        (owner_id, store_name, address, city, state, zipcode, contact_number, lottery_ac_no, lottery_pw)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        store_name,
+        address || null,
+        city || null,
+        state || null,
+        zipcode || null,
+        contact_number || null,
+        lottery_ac_no,
+        hashedLotteryPassword,
+      ]
     );
 
     const storeId = (storeResult as any).insertId;
 
-    // Get the newly created store
-    const [stores] = await pool.query('SELECT * FROM stores WHERE id = ?', [storeId]);
+    const [stores] = await pool.query(
+      `SELECT
+        store_id as id,
+        owner_id,
+        store_name,
+        address,
+        city,
+        state,
+        zipcode,
+        contact_number,
+        lottery_ac_no,
+        created_at
+      FROM stores WHERE store_id = ?`,
+      [storeId]
+    );
     const store = (stores as any[])[0];
 
     // Automatically create inventory for all lottery types
@@ -99,11 +167,19 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
   try {
     const userId = req.user?.id;
     const storeId = parseInt(req.params.id);
-    const { name, address, phone, active } = req.body;
+    const {
+      store_name,
+      address,
+      city,
+      state,
+      zipcode,
+      contact_number,
+      lottery_ac_no,
+      lottery_pw,
+    } = req.body;
 
-    // Verify ownership
     const [checkResult] = await pool.query(
-      'SELECT * FROM stores WHERE id = ? AND owner_id = ?',
+      'SELECT * FROM stores WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 
@@ -112,19 +188,83 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
+    if (lottery_ac_no) {
+      const [existing] = await pool.query(
+        'SELECT store_id FROM stores WHERE lottery_ac_no = ? AND store_id != ?',
+        [lottery_ac_no, storeId]
+      );
+
+      if ((existing as any[]).length > 0) {
+        res.status(400).json({ error: 'Lottery account number already in use' });
+        return;
+      }
+    }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (store_name) {
+      updates.push('store_name = ?');
+      values.push(store_name);
+    }
+    if (address) {
+      updates.push('address = ?');
+      values.push(address);
+    }
+    if (city) {
+      updates.push('city = ?');
+      values.push(city);
+    }
+    if (state) {
+      updates.push('state = ?');
+      values.push(state);
+    }
+    if (zipcode) {
+      updates.push('zipcode = ?');
+      values.push(zipcode);
+    }
+    if (contact_number) {
+      updates.push('contact_number = ?');
+      values.push(contact_number);
+    }
+    if (lottery_ac_no) {
+      updates.push('lottery_ac_no = ?');
+      values.push(lottery_ac_no);
+    }
+    if (lottery_pw) {
+      const hashedLotteryPassword = await hashPassword(lottery_pw);
+      updates.push('lottery_pw = ?');
+      values.push(hashedLotteryPassword);
+    }
+
+    if (updates.length === 0) {
+      res.status(400).json({ error: 'Nothing to update' });
+      return;
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+
     await pool.query(
-      `UPDATE stores
-      SET name = COALESCE(?, name),
-          address = COALESCE(?, address),
-          phone = COALESCE(?, phone),
-          active = COALESCE(?, active),
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND owner_id = ?`,
-      [name, address, phone, active, storeId, userId]
+      `UPDATE stores SET ${updates.join(', ')} WHERE store_id = ? AND owner_id = ?`,
+      [...values, storeId, userId]
     );
 
-    // Get updated store
-    const [result] = await pool.query('SELECT * FROM stores WHERE id = ?', [storeId]);
+    const [result] = await pool.query(
+      `SELECT
+        store_id as id,
+        owner_id,
+        store_name,
+        address,
+        city,
+        state,
+        zipcode,
+        contact_number,
+        lottery_ac_no,
+        created_at,
+        updated_at
+      FROM stores WHERE store_id = ?`,
+      [storeId]
+    );
 
     res.status(200).json({
       store: (result as any[])[0],
@@ -141,8 +281,27 @@ export const deleteStore = async (req: AuthRequest, res: Response): Promise<void
     const userId = req.user?.id;
     const storeId = parseInt(req.params.id);
 
+    // Clean related data
+    const [inventories] = await pool.query(
+      'SELECT id FROM store_lottery_inventory WHERE store_id = ?',
+      [storeId]
+    );
+
+    const inventoryIds = (inventories as any[]).map((inv) => inv.id);
+
+    if (inventoryIds.length > 0) {
+      const placeholders = inventoryIds.map(() => '?').join(', ');
+      await pool.query(
+        `DELETE FROM tickets WHERE inventory_id IN (${placeholders})`,
+        inventoryIds
+      );
+    }
+
+    await pool.query('DELETE FROM store_lottery_inventory WHERE store_id = ?', [storeId]);
+    await pool.query('DELETE FROM scanned_tickets WHERE store_id = ?', [storeId]);
+
     const [result] = await pool.query(
-      'DELETE FROM stores WHERE id = ? AND owner_id = ?',
+      'DELETE FROM stores WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 

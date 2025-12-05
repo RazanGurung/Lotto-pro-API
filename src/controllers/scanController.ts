@@ -51,7 +51,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
 
     // Verify store ownership
     const [storeCheck] = await pool.query(
-      'SELECT * FROM stores WHERE id = ? AND owner_id = ?',
+      'SELECT * FROM stores WHERE store_id = ? AND owner_id = ?',
       [store_id, userId]
     );
 
@@ -190,7 +190,7 @@ export const getScanHistory = async (req: AuthRequest, res: Response): Promise<v
 
     // Verify store ownership
     const [storeCheck] = await pool.query(
-      'SELECT * FROM stores WHERE id = ? AND owner_id = ?',
+      'SELECT * FROM stores WHERE store_id = ? AND owner_id = ?',
       [storeId, userId]
     );
 

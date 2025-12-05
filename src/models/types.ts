@@ -13,12 +13,15 @@ export interface User {
 export interface Store {
   id: number;
   owner_id: number;
-  name: string;
-  address: string;
-  phone?: string;
-  active: boolean;
+  store_name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipcode?: string;
+  lottery_ac_no: string;
+  lottery_pw: string;
   created_at: Date;
-  updated_at: Date;
+  updated_at?: Date;
 }
 
 export interface LotteryType {
@@ -84,9 +87,14 @@ export interface AuthResponse {
 }
 
 export interface CreateStoreRequest {
-  name: string;
-  address: string;
-  phone?: string;
+  store_name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipcode?: string;
+  contact_number?: string;
+  lottery_ac_no: string;
+  lottery_pw: string;
 }
 
 export interface ScanTicketRequest {
@@ -100,6 +108,11 @@ export interface DecodedBarcodeData {
   isValid: boolean;
   raw: string;
   error?: string;
+}
+
+export interface StoreLoginRequest {
+  lottery_ac_no: string;
+  lottery_pw: string;
 }
 
 /// super admin interface

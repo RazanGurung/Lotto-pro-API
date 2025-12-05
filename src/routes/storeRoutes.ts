@@ -6,11 +6,14 @@ import {
   updateStore,
   deleteStore,
 } from '../controllers/storeController';
+import { storeAccountLogin } from '../controllers/storeAccountController';
 import { authMiddleware } from '../middleware/auth';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
-// All store routes require authentication
+router.post('/login', asyncHandler(storeAccountLogin));
+
 router.use(authMiddleware);
 
 router.get('/', getStores);

@@ -4,7 +4,7 @@ import jwt, { SignOptions } from 'jsonwebtoken';
 const JWT_SECRET: string = process.env.JWT_SECRET || 'lottery_pro_secret_key_change_in_production';
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '7d';
 
-export type UserRole = 'store_owner' | 'super_admin';
+export type UserRole = 'store_owner' | 'super_admin' | 'store_account';
 
 export interface TokenPayload {
   id: number;
