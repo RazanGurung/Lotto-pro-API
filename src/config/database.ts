@@ -151,33 +151,37 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 👈 IMPORTANT: pool is *not* nullable here
 export let pool!: mysql.Pool;
 
 export const connectDB = async () => {
   // If we've already created the pool, just reuse it
   if (pool) return pool;
 
-  const { DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT } = process.env;
+  // Support both Railway's MYSQL* vars and custom DB_* vars
+  const host = process.env.MYSQLHOST || process.env.DB_HOST;
+  const user = process.env.MYSQLUSER || process.env.DB_USER;
+  const password = process.env.MYSQLPASSWORD || process.env.DB_PASSWORD;
+  const database = process.env.MYSQLDATABASE || process.env.DB_NAME;
+  const port = process.env.MYSQLPORT || process.env.DB_PORT || '3306';
 
-  if (!DB_HOST || !DB_USER || !DB_PASSWORD || !DB_NAME || !DB_PORT) {
-    throw new Error('Missing one or more DB_* environment variables');
+  if (!host || !user || !password || !database) {
+    throw new Error('Missing database environment variables. Required: host, user, password, database');
   }
 
   console.log('🔍 DB ENV:', {
-    host: DB_HOST,
-    user: DB_USER,
-    db: DB_NAME,
-    port: DB_PORT,
+    host,
+    user,
+    database,
+    port,
   });
 
   // Create the pool once
   pool = mysql.createPool({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_NAME,
-    port: Number(DB_PORT) || 3306,
+    host,
+    user,
+    password,
+    database,
+    port: Number(port),
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

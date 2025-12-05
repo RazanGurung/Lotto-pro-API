@@ -66,8 +66,8 @@ const startServer = async () => {
     // Connect to database
     await connectDB();
 
-    // Start listening
-    app.listen(PORT, () => {
+    // Start listening - bind to 0.0.0.0 for Railway
+    app.listen(PORT, '0.0.0.0', () => {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('🎰 Lottery Pro Backend API');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
