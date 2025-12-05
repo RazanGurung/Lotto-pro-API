@@ -48,7 +48,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     );
 
     const user = (newUser as any[])[0];
-    const token = generateToken({ ...user, password_hash });
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      role: 'store_owner',
+    });
 
     res.status(201).json({
       user,
@@ -105,7 +110,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       updated_at: storeOwner.created_at, // STORE_OWNER doesn't have updated_at
     };
 
-    const token = generateToken(user as any);
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      role: 'store_owner',
+    });
 
     // Return user without password
     const { password: _, ...userWithoutPassword } = storeOwner;

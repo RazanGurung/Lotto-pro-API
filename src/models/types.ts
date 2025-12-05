@@ -101,3 +101,12 @@ export interface DecodedBarcodeData {
   raw: string;
   error?: string;
 }
+
+/// super admin interface
+export interface SuperAdmin {
+  super_admin_id: number;
+  name: string;
+  email: string;
+  password: string; // hashed
+  created_at: Date;
+}

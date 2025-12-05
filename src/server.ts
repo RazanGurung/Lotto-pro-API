@@ -9,6 +9,7 @@ import storeRoutes from './routes/storeRoutes';
 import lotteryRoutes from './routes/lotteryRoutes';
 import scanRoutes from './routes/scanRoutes';
 import reportRoutes from './routes/reportRoutes';
+import superAdminRoutes from './routes/superAdminRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -98,6 +99,7 @@ app.use('/api/lottery', lotteryRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/store', storeRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
@@ -174,6 +176,8 @@ const startServer = async () => {
       console.log('  POST   /api/auth/register');
       console.log('  POST   /api/auth/login');
       console.log('  GET    /api/auth/profile');
+      console.log('  POST   /api/super-admin/login');
+      console.log('  GET    /api/super-admin/profile');
       console.log('  GET    /api/store');
       console.log('  POST   /api/store');
       console.log('  GET    /api/lottery/types');

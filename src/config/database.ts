@@ -146,6 +146,7 @@
 //   }
 // };
 
+///// -=====================+ONLINE HOSTING  -=====================+
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
@@ -167,7 +168,9 @@ export const connectDB = async () => {
 
     if (!host || !user || !password || !database) {
       console.error('❌ Missing database environment variables');
-      console.error('Required: MYSQLHOST/DB_HOST, MYSQLUSER/DB_USER, MYSQLPASSWORD/DB_PASSWORD, MYSQLDATABASE/DB_NAME');
+      console.error(
+        'Required: MYSQLHOST/DB_HOST, MYSQLUSER/DB_USER, MYSQLPASSWORD/DB_PASSWORD, MYSQLDATABASE/DB_NAME'
+      );
       throw new Error('Missing database environment variables');
     }
 
