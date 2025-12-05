@@ -67,8 +67,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 };
 
 /// LOGIN
-const SUPER_ADMIN_DOMAIN =
-  (process.env.SUPER_ADMIN_DOMAIN || '@lottopro.com').toLowerCase();
+const SUPER_ADMIN_DOMAIN = (
+  process.env.SUPER_ADMIN_DOMAIN || '@lottopro.com'
+).toLowerCase();
 
 const isSuperAdminEmail = (email: string): boolean => {
   const normalized = email.toLowerCase();
@@ -183,7 +184,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       user: userResponse,
       token,
       redirectTo: '/api/auth/profile',
-      message: 'Login successful',
+      message: 'Store Owner login successful',
     });
   } catch (error) {
     console.error('Login error:', error);
