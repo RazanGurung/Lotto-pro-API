@@ -162,7 +162,7 @@ export const createStore = async (
 
     const inventoryPromises = (lotteryTypesResult as any[]).map((lt) =>
       pool.query(
-        'INSERT INTO STORE_LOTTERY_BOOK (store_id, lottery_type_id, total_count, current_count) VALUES (?, ?, ?, ?)',
+        'INSERT INTO store_lottery_inventory (store_id, lottery_type_id, total_count, current_count) VALUES (?, ?, ?, ?)',
         [store.id, lt.lottery_id, 100, 100]
       )
     );
