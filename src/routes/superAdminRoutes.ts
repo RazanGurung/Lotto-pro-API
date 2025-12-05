@@ -16,19 +16,21 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { superAdminAuthMiddleware } from '../middleware/auth';
 
 const router = Router();
-
+// super admin login
 router.post('/login', asyncHandler(superAdminLogin));
+/// GET super admin profile
 router.get(
   '/profile',
   superAdminAuthMiddleware,
   asyncHandler(getSuperAdminProfile)
 );
+/// UPDATE super admin profile
 router.put(
   '/profile',
   superAdminAuthMiddleware,
   asyncHandler(updateSuperAdminProfile)
 );
-
+/// ADD lotteries by super admin
 router.post(
   '/lotteries',
   superAdminAuthMiddleware,
