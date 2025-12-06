@@ -10,6 +10,7 @@ import {
   assignLotteryToSuperAdmin,
   removeLotteryAssignment,
   updateLotteryStatus,
+  updateLotteryMaster,
   deleteLotteryMaster,
 } from '../controllers/lotteryMasterController';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -59,6 +60,12 @@ router.patch(
   '/lotteries/:lotteryId/status',
   superAdminAuthMiddleware,
   asyncHandler(updateLotteryStatus)
+);
+
+router.put(
+  '/lotteries/:lotteryId',
+  superAdminAuthMiddleware,
+  asyncHandler(updateLotteryMaster)
 );
 
 router.delete(

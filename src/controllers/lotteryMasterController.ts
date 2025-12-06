@@ -465,6 +465,110 @@ export const updateLotteryStatus = async (
   }
 };
 
+export const updateLotteryMaster = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const adminId = req.user?.id;
+    const lotteryId = Number(req.params.lotteryId);
+
+    if (!adminId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!lotteryId || isNaN(lotteryId)) {
+      res.status(400).json({ error: 'Invalid lotteryId' });
+      return;
+    }
+
+    const validation = validateLotteryPayload(req.body);
+    if (!validation.valid || !validation.data) {
+      res.status(400).json({ error: validation.errors });
+      return;
+    }
+
+    const {
+      lottery_name,
+      lottery_number,
+      price,
+      launch_date,
+      state,
+      start_number,
+      end_number,
+      status,
+      image_url,
+    } = validation.data;
+
+    const [existingLottery] = await pool.query(
+      `SELECT lottery_id FROM ${LOTTERY_TABLE} WHERE lottery_id = ?`,
+      [lotteryId]
+    );
+
+    if ((existingLottery as any[]).length === 0) {
+      res.status(404).json({ error: 'Lottery not found' });
+      return;
+    }
+
+    const [nameConflict] = await pool.query(
+      `SELECT lottery_id FROM ${LOTTERY_TABLE} WHERE lottery_name = ? AND lottery_id != ?`,
+      [lottery_name, lotteryId]
+    );
+
+    if ((nameConflict as any[]).length > 0) {
+      res.status(400).json({ error: 'Lottery with this name already exists' });
+      return;
+    }
+
+    const [numberConflict] = await pool.query(
+      `SELECT lottery_id FROM ${LOTTERY_TABLE} WHERE lottery_number = ? AND lottery_id != ?`,
+      [lottery_number, lotteryId]
+    );
+
+    if ((numberConflict as any[]).length > 0) {
+      res.status(400).json({ error: 'Lottery with this number already exists' });
+      return;
+    }
+
+    await pool.query(
+      `UPDATE ${LOTTERY_TABLE}
+       SET lottery_name = ?,
+           lottery_number = ?,
+           price = ?,
+           launch_date = ?,
+           state = ?,
+           start_number = ?,
+           end_number = ?,
+           status = ?,
+           image_url = ?
+       WHERE lottery_id = ?`,
+      [
+        lottery_name,
+        lottery_number,
+        price,
+        launch_date ?? null,
+        state ?? null,
+        start_number,
+        end_number,
+        status,
+        image_url ?? null,
+        lotteryId,
+      ]
+    );
+
+    const lottery = await fetchLotteryWithMeta(lotteryId, adminId);
+
+    res.status(200).json({
+      lottery,
+      message: 'Lottery updated successfully',
+    });
+  } catch (error) {
+    console.error('Update lottery master error:', error);
+    res.status(500).json({ error: 'Server error updating lottery' });
+  }
+};
+
 export const deleteLotteryMaster = async (
   req: AuthRequest,
   res: Response
