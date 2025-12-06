@@ -22,7 +22,7 @@ export const getStores = async (
         s.zipcode,
         s.lottery_ac_no,
         s.created_at,
-        COUNT(DISTINCT sli.id) as lottery_count,
+        COUNT(sli.lottery_type_id) as lottery_count,
         COALESCE(SUM(sli.current_count), 0) as total_active_tickets
       FROM STORES s
       LEFT JOIN store_lottery_inventory sli ON s.store_id = sli.store_id

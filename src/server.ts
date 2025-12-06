@@ -98,7 +98,6 @@ app.use('/api/stores', storeRoutes);
 app.use('/api/lottery', lotteryRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/reports', reportRoutes);
-app.use('/api/store', storeRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -185,8 +184,8 @@ const startServer = async () => {
       console.log('  DELETE /api/super-admin/lotteries/:lotteryId/assign');
       console.log('  PATCH  /api/super-admin/lotteries/:lotteryId/status');
       console.log('  DELETE /api/super-admin/lotteries/:lotteryId');
-      console.log('  GET    /api/store');
-      console.log('  POST   /api/store');
+      console.log('  GET    /api/stores');
+      console.log('  POST   /api/stores');
       console.log('  GET    /api/lottery/types');
       console.log('  GET    /api/lottery/store/:storeId/inventory');
       console.log('  POST   /api/scan/ticket');
