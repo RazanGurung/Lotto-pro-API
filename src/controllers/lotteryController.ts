@@ -61,7 +61,11 @@ export const getStoreInventory = async (req: AuthRequest, res: Response): Promis
         id,
         store_id,
         lottery_id,
-        status
+        serial_number,
+        total_count,
+        current_count,
+        status,
+        created_at
       FROM STORE_LOTTERY_INVENTORY
       WHERE store_id = ?
       ORDER BY updated_at DESC`,
