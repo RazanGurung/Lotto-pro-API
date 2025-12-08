@@ -37,6 +37,7 @@ export const getStoreInventory = async (req: AuthRequest, res: Response): Promis
         sli.id,
         sli.store_id,
         sli.lottery_type_id,
+        sli.serial_number,
         sli.total_count,
         sli.current_count,
         lm.lottery_name,
@@ -83,6 +84,7 @@ export const getLotteryDetail = async (req: AuthRequest, res: Response): Promise
     const [inventoryResult] = await pool.query(
       `SELECT
         sli.*,
+        sli.serial_number,
         lm.lottery_name,
         lm.lottery_number,
         lm.price,

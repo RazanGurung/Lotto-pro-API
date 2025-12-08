@@ -155,23 +155,9 @@ export const createStore = async (
     );
     const store = (stores as any[])[0];
 
-    // Automatically create inventory for all lottery types
-    const [lotteryTypesResult] = await pool.query(
-      "SELECT lottery_id FROM LOTTERY_MASTER WHERE status = 'active'"
-    );
-
-    const inventoryPromises = (lotteryTypesResult as any[]).map((lt) =>
-      pool.query(
-        'INSERT INTO store_lottery_inventory (store_id, lottery_type_id, total_count, current_count) VALUES (?, ?, ?, ?)',
-        [store.id, lt.lottery_id, 100, 100]
-      )
-    );
-
-    await Promise.all(inventoryPromises);
-
     res.status(201).json({
       store,
-      message: 'Store created successfully with full lottery inventory',
+      message: 'Store created successfully',
     });
   } catch (error) {
     console.error('Create store error:', error);

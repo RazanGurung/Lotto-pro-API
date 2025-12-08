@@ -1,51 +1,99 @@
 import { Response } from 'express';
 import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
-import { ScanTicketRequest, DecodedBarcodeData } from '../models/types';
+import { ScanTicketRequest } from '../models/types';
 
-// Decode barcode data (simple implementation - can be enhanced)
-const decodeBarcode = (barcodeData: string): DecodedBarcodeData => {
-  try {
-    // Example barcode format: "LT-{lottery_type_id}-{ticket_number}"
-    // e.g., "LT-1-42" means Lottery Type 1, Ticket #42
+interface ParsedScanPayload {
+  lotteryNumber: string;
+  ticketSerial: string;
+  packNumber: number;
+  raw: string;
+}
 
-    const parts = barcodeData.split('-');
+const parseScanInput = (payload: ScanTicketRequest): ParsedScanPayload => {
+  if (payload.barcode_data) {
+    const raw = payload.barcode_data.trim();
+    const parts = raw.split('-');
 
-    if (parts.length === 3 && parts[0] === 'LT') {
-      const lottery_type_id = parseInt(parts[1]);
-      const ticket_number = parseInt(parts[2]);
+    if (parts.length === 3) {
+      const [lotteryNumber, ticketSerial, pack] = parts;
+      const packNumber = parseInt(pack, 10);
 
-      if (!isNaN(lottery_type_id) && !isNaN(ticket_number)) {
+      if (
+        lotteryNumber &&
+        ticketSerial &&
+        !isNaN(packNumber)
+      ) {
         return {
-          lottery_type_id,
-          ticket_number,
-          isValid: true,
-          raw: barcodeData,
+          lotteryNumber,
+          ticketSerial,
+          packNumber,
+          raw,
         };
       }
     }
 
+    throw new Error('Invalid barcode format. Expected XXX-YYYYYY-ZZZ');
+  }
+
+  if (
+    payload.lottery_number &&
+    payload.ticket_serial &&
+    payload.pack_number !== undefined
+  ) {
+    const packNumber = Number(payload.pack_number);
+
+    if (isNaN(packNumber)) {
+      throw new Error('pack_number must be a number');
+    }
+
     return {
-      isValid: false,
-      raw: barcodeData,
-      error: 'Invalid barcode format',
-    };
-  } catch (error) {
-    return {
-      isValid: false,
-      raw: barcodeData,
-      error: 'Failed to decode barcode',
+      lotteryNumber: payload.lottery_number,
+      ticketSerial: payload.ticket_serial,
+      packNumber,
+      raw: `${payload.lottery_number}-${payload.ticket_serial}-${packNumber}`,
     };
   }
+
+  throw new Error(
+    'Provide either barcode_data or lottery_number, ticket_serial, and pack_number'
+  );
+};
+
+const calculateTotalTickets = (
+  startNumber: number,
+  endNumber: number
+): number => {
+  return Math.abs(endNumber - startNumber) + 1;
+};
+
+const calculateSoldCount = (
+  startNumber: number,
+  endNumber: number,
+  packNumber: number
+): number => {
+  const totalTickets = calculateTotalTickets(startNumber, endNumber);
+  let sold: number;
+
+  if (startNumber <= endNumber) {
+    sold = packNumber - startNumber;
+  } else {
+    sold = startNumber - packNumber;
+  }
+
+  if (sold < 0) sold = 0;
+  if (sold > totalTickets) sold = totalTickets;
+
+  return sold;
 };
 
 export const scanTicket = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    const { barcode_data, store_id }: ScanTicketRequest = req.body;
+    const { store_id }: ScanTicketRequest = req.body;
 
-    if (!barcode_data || !store_id) {
-      res.status(400).json({ error: 'Barcode data and store ID are required' });
+    if (!store_id) {
+      res.status(400).json({ error: 'Store ID is required' });
       return;
     }
 
@@ -60,121 +108,149 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    // Decode barcode
-    const decoded = decodeBarcode(barcode_data);
+    let parsedScan: ParsedScanPayload;
 
-    if (!decoded.isValid) {
-      // Log the scan attempt even if invalid
-      await pool.query(
-        'INSERT INTO scanned_tickets (store_id, barcode_data, scanned_by) VALUES (?, ?, ?)',
-        [store_id, barcode_data, userId]
-      );
+    try {
+      parsedScan = parseScanInput(req.body);
+    } catch (parseError) {
+      res.status(400).json({ error: (parseError as Error).message });
+      return;
+    }
 
-      res.status(400).json({
-        error: 'Invalid barcode',
-        decoded,
+    const [lotteryRows] = await pool.query(
+      `SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url
+       FROM LOTTERY_MASTER WHERE lottery_number = ?`,
+      [parsedScan.lotteryNumber]
+    );
+
+    if ((lotteryRows as any[]).length === 0) {
+      res.status(200).json({
+        status: 'ok',
+        game_active: false,
+        reason: 'not_found',
+        lottery_number: parsedScan.lotteryNumber,
       });
       return;
     }
 
-    // Get inventory for this lottery type in this store
-    const [inventoryResult] = await pool.query(
-      `SELECT sli.*, lm.lottery_name, lm.lottery_number, lm.price, lm.launch_date, lm.state
-      FROM store_lottery_inventory sli
-      JOIN LOTTERY_MASTER lm ON sli.lottery_type_id = lm.lottery_id
-      WHERE sli.store_id = ? AND sli.lottery_type_id = ?`,
-      [store_id, decoded.lottery_type_id]
-    );
+    const master = (lotteryRows as any[])[0];
 
-    if ((inventoryResult as any[]).length === 0) {
-      res.status(404).json({
-        error: 'Lottery type not found in store inventory',
-        decoded,
+    if (master.status !== 'active') {
+      res.status(200).json({
+        status: 'ok',
+        game_active: false,
+        reason: 'inactive_in_master',
+        lottery_number: parsedScan.lotteryNumber,
       });
       return;
     }
 
-    const inventory = (inventoryResult as any[])[0];
+    const totalTickets = calculateTotalTickets(
+      master.start_number,
+      master.end_number
+    );
+    const soldCount = calculateSoldCount(
+      master.start_number,
+      master.end_number,
+      parsedScan.packNumber
+    );
+    const inventoryStatus = soldCount >= totalTickets ? 'finished' : 'active';
 
-    // Check if ticket already exists
-    let [ticketResult] = await pool.query(
-      'SELECT * FROM tickets WHERE inventory_id = ? AND ticket_number = ?',
-      [inventory.id, decoded.ticket_number]
+    const [inventoryRows] = await pool.query(
+      `SELECT * FROM store_lottery_inventory
+       WHERE store_id = ? AND lottery_type_id = ? AND serial_number = ?`,
+      [store_id, master.lottery_id, parsedScan.ticketSerial]
     );
 
-    let ticket;
-    let isNewTicket = false;
+    let inventory;
 
-    if ((ticketResult as any[]).length === 0) {
-      // Create new ticket and mark as sold
+    if ((inventoryRows as any[]).length === 0) {
       const [insertResult] = await pool.query(
-        `INSERT INTO tickets (inventory_id, ticket_number, sold, sold_date, barcode)
-        VALUES (?, ?, true, CURRENT_TIMESTAMP, ?)`,
-        [inventory.id, decoded.ticket_number, barcode_data]
+        `INSERT INTO store_lottery_inventory
+          (store_id, lottery_type_id, serial_number, total_count, current_count, status)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          store_id,
+          master.lottery_id,
+          parsedScan.ticketSerial,
+          totalTickets,
+          soldCount,
+          inventoryStatus,
+        ]
       );
 
-      const insertId = (insertResult as any).insertId;
-      const [newTicket] = await pool.query('SELECT * FROM tickets WHERE id = ?', [insertId]);
-      ticket = (newTicket as any[])[0];
-      isNewTicket = true;
-
-      // Decrease current count
-      await pool.query(
-        'UPDATE store_lottery_inventory SET current_count = current_count - 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [inventory.id]
+      const newId = (insertResult as any).insertId;
+      const [newInventory] = await pool.query(
+        'SELECT * FROM store_lottery_inventory WHERE id = ?',
+        [newId]
       );
+      inventory = (newInventory as any[])[0];
     } else {
-      ticket = (ticketResult as any[])[0];
+      inventory = (inventoryRows as any[])[0];
 
-      if (ticket.sold) {
-        res.status(400).json({
-          error: 'Ticket already scanned',
-          ticket,
-          decoded,
-        });
-        return;
-      }
-
-      // Mark ticket as sold
       await pool.query(
-        `UPDATE tickets
-        SET sold = true,
-            sold_date = CURRENT_TIMESTAMP,
-            barcode = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?`,
-        [barcode_data, ticket.id]
+        `UPDATE store_lottery_inventory
+         SET total_count = ?,
+             current_count = ?,
+             status = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [totalTickets, soldCount, inventoryStatus, inventory.id]
       );
 
-      // Decrease current count
-      await pool.query(
-        'UPDATE store_lottery_inventory SET current_count = current_count - 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      const [updatedInventory] = await pool.query(
+        'SELECT * FROM store_lottery_inventory WHERE id = ?',
         [inventory.id]
       );
+      inventory = (updatedInventory as any[])[0];
     }
 
-    // Log the scan
-    await pool.query(
-      `INSERT INTO scanned_tickets (store_id, ticket_id, barcode_data, lottery_type_id, ticket_number, scanned_by)
-      VALUES (?, ?, ?, ?, ?, ?)`,
-      [store_id, ticket.id, barcode_data, decoded.lottery_type_id, decoded.ticket_number, userId]
-    );
-
-    // Get updated inventory
-    const [updatedInventoryResult] = await pool.query(
-      'SELECT * FROM store_lottery_inventory WHERE id = ?',
-      [inventory.id]
-    );
+    try {
+      await pool.query(
+        `INSERT INTO scanned_tickets (store_id, barcode_data, lottery_type_id, ticket_number, scanned_by)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          store_id,
+          parsedScan.raw,
+          master.lottery_id,
+          parsedScan.packNumber,
+          userId,
+        ]
+      );
+    } catch (logError) {
+      console.warn('Failed to log scan event:', logError);
+    }
 
     res.status(200).json({
-      message: isNewTicket ? 'Ticket scanned and added to inventory' : 'Ticket marked as sold',
-      ticket,
-      decoded,
-      lottery: {
-        name: inventory.lottery_name,
-        price: inventory.price,
+      status: 'ok',
+      game_active: true,
+      lottery_master: {
+        lottery_number: master.lottery_number,
+        lottery_name: master.lottery_name,
+        price: master.price,
+        start_number: master.start_number,
+        end_number: master.end_number,
+        total_tickets: totalTickets,
+        status: master.status,
+        launch_date: master.launch_date,
+        state: master.state,
+        image_url: master.image_url,
       },
-      inventory: (updatedInventoryResult as any[])[0],
+      inventory: {
+        id: inventory.id,
+        store_id,
+        lottery_number: master.lottery_number,
+        lottery_type_id: master.lottery_id,
+        serial_number: inventory.serial_number,
+        total_count: inventory.total_count,
+        current_count: inventory.current_count,
+        remaining_tickets: Math.max(
+          inventory.total_count - inventory.current_count,
+          0
+        ),
+        status: inventory.status,
+        updated_at: inventory.updated_at,
+      },
     });
   } catch (error) {
     console.error('Scan ticket error:', error);

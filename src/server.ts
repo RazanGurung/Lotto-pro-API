@@ -183,6 +183,7 @@ const startServer = async () => {
       console.log('  POST   /api/super-admin/lotteries/:lotteryId/assign');
       console.log('  DELETE /api/super-admin/lotteries/:lotteryId/assign');
       console.log('  PATCH  /api/super-admin/lotteries/:lotteryId/status');
+      console.log('  PUT    /api/super-admin/lotteries/:lotteryId');
       console.log('  DELETE /api/super-admin/lotteries/:lotteryId');
       console.log('  GET    /api/stores');
       console.log('  POST   /api/stores');

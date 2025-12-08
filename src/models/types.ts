@@ -43,8 +43,10 @@ export interface StoreLotteryInventory {
   id: number;
   store_id: number;
   lottery_type_id: number;
+  serial_number?: string;
   total_count: number;
   current_count: number;
+  status?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -101,13 +103,17 @@ export interface CreateStoreRequest {
 }
 
 export interface ScanTicketRequest {
-  barcode_data: string;
   store_id: number;
+  barcode_data?: string;
+  lottery_number?: string;
+  ticket_serial?: string;
+  pack_number?: number;
 }
 
 export interface DecodedBarcodeData {
-  lottery_type_id?: number;
-  ticket_number?: number;
+  lottery_number?: string;
+  ticket_serial?: string;
+  pack_number?: number;
   isValid: boolean;
   raw: string;
   error?: string;
