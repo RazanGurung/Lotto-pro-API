@@ -7,7 +7,7 @@ const router = Router();
 // All scan routes require authentication
 router.use(authMiddleware);
 
-router.post('/ticket', scanTicket);
-router.get('/history/:storeId', getScanHistory);
+router.post('/scan', scanTicket);
+router.get('/scan/history/:storeId', getScanHistory);
 
 export default router;

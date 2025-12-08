@@ -96,7 +96,7 @@ app.post('/test', (req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/lottery', lotteryRoutes);
-app.use('/api/scan', scanRoutes);
+app.use('/api/lotteries', scanRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 // 404 handler
@@ -189,7 +189,7 @@ const startServer = async () => {
       console.log('  POST   /api/stores');
       console.log('  GET    /api/lottery/types');
       console.log('  GET    /api/lottery/store/:storeId/inventory');
-      console.log('  POST   /api/scan/ticket');
+      console.log('  POST   /api/lotteries/scan');
       console.log('  GET    /api/reports/store/:storeId');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     });
