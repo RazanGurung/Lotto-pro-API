@@ -4,9 +4,28 @@ import { AuthRequest } from '../middleware/auth';
 
 export const getLotteryTypes = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [result] = await pool.query(
-      "SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url FROM LOTTERY_MASTER WHERE status = 'active' ORDER BY price, lottery_name"
-    );
+    const userId = req.user?.id;
+    let state: string | null = null;
+
+    if (userId) {
+      const [ownerRows] = await pool.query(
+        'SELECT state FROM STORES WHERE owner_id = ? AND state IS NOT NULL LIMIT 1',
+        [userId]
+      );
+
+      if ((ownerRows as any[]).length > 0) {
+        state = (ownerRows as any[])[0].state || null;
+      }
+    }
+
+    const [result] = state
+      ? await pool.query(
+          "SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url FROM LOTTERY_MASTER WHERE status = 'active' AND state = ? ORDER BY price, lottery_name",
+          [state]
+        )
+      : await pool.query(
+          "SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url FROM LOTTERY_MASTER WHERE status = 'active' ORDER BY price, lottery_name"
+        );
 
     res.status(200).json({ lotteryTypes: result });
   } catch (error) {
