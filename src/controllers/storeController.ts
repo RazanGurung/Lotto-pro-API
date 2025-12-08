@@ -22,10 +22,10 @@ export const getStores = async (
         s.zipcode,
         s.lottery_ac_no,
         s.created_at,
-        COUNT(sli.lottery_type_id) as lottery_count,
+        COUNT(sli.lottery_id) as lottery_count,
         COALESCE(SUM(sli.current_count), 0) as total_active_tickets
       FROM STORES s
-      LEFT JOIN store_lottery_inventory sli ON s.store_id = sli.store_id
+      LEFT JOIN STORE_LOTTERY_INVENTORY sli ON s.store_id = sli.store_id
       WHERE s.owner_id = ?
       GROUP BY s.store_id
       ORDER BY s.created_at DESC`,
@@ -301,7 +301,7 @@ export const deleteStore = async (
 
     // Clean related data
     const [inventories] = await pool.query(
-      'SELECT id FROM store_lottery_inventory WHERE store_id = ?',
+      'SELECT id FROM STORE_LOTTERY_INVENTORY WHERE store_id = ?',
       [storeId]
     );
 
@@ -315,7 +315,7 @@ export const deleteStore = async (
       );
     }
 
-    await pool.query('DELETE FROM store_lottery_inventory WHERE store_id = ?', [
+    await pool.query('DELETE FROM STORE_LOTTERY_INVENTORY WHERE store_id = ?', [
       storeId,
     ]);
     await pool.query('DELETE FROM scanned_tickets WHERE store_id = ?', [

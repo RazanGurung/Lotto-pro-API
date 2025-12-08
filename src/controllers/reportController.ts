@@ -27,7 +27,7 @@ export const getStoreReport = async (req: AuthRequest, res: Response): Promise<v
         SUM(total_count) as total_tickets,
         SUM(current_count) as available_tickets,
         SUM(total_count - current_count) as sold_tickets
-      FROM store_lottery_inventory
+      FROM STORE_LOTTERY_INVENTORY
       WHERE store_id = ?`,
       [storeId]
     );
@@ -43,8 +43,8 @@ export const getStoreReport = async (req: AuthRequest, res: Response): Promise<v
         sli.current_count,
         (sli.total_count - sli.current_count) as sold_count,
         (sli.total_count - sli.current_count) * lm.price as revenue
-      FROM store_lottery_inventory sli
-      JOIN LOTTERY_MASTER lm ON sli.lottery_type_id = lm.lottery_id
+      FROM STORE_LOTTERY_INVENTORY sli
+      JOIN LOTTERY_MASTER lm ON sli.lottery_id = lm.lottery_id
       WHERE sli.store_id = ?
       ORDER BY revenue DESC`,
       [storeId]
@@ -130,8 +130,8 @@ export const getLotteryReport = async (req: AuthRequest, res: Response): Promise
         lm.end_number,
         (sli.total_count - sli.current_count) as sold_count,
         (sli.total_count - sli.current_count) * lm.price as revenue
-      FROM store_lottery_inventory sli
-      JOIN LOTTERY_MASTER lm ON sli.lottery_type_id = lm.lottery_id
+      FROM STORE_LOTTERY_INVENTORY sli
+      JOIN LOTTERY_MASTER lm ON sli.lottery_id = lm.lottery_id
       WHERE sli.store_id = ? AND sli.lottery_type_id = ?`,
       [storeId, lotteryTypeId]
     );

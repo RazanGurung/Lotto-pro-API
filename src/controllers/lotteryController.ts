@@ -49,7 +49,7 @@ export const getStoreInventory = async (req: AuthRequest, res: Response): Promis
         lm.start_number,
         lm.end_number,
         lm.status
-      FROM store_lottery_inventory sli
+      FROM STORE_LOTTERY_INVENTORY sli
       JOIN LOTTERY_MASTER lm ON sli.lottery_type_id = lm.lottery_id
       WHERE sli.store_id = ?
       ORDER BY lm.price, lm.lottery_name`,
@@ -94,7 +94,7 @@ export const getLotteryDetail = async (req: AuthRequest, res: Response): Promise
         lm.start_number,
         lm.end_number,
         lm.status
-      FROM store_lottery_inventory sli
+      FROM STORE_LOTTERY_INVENTORY sli
       JOIN LOTTERY_MASTER lm ON sli.lottery_type_id = lm.lottery_id
       WHERE sli.store_id = ? AND sli.lottery_type_id = ?`,
       [storeId, lotteryTypeId]
@@ -150,7 +150,7 @@ export const updateInventory = async (req: AuthRequest, res: Response): Promise<
 
     // Update inventory
     await pool.query(
-      `UPDATE store_lottery_inventory
+      `UPDATE STORE_LOTTERY_INVENTORY
       SET total_count = COALESCE(?, total_count),
           current_count = COALESCE(?, current_count),
           updated_at = CURRENT_TIMESTAMP
@@ -160,7 +160,7 @@ export const updateInventory = async (req: AuthRequest, res: Response): Promise<
 
     // Get updated inventory
     const [result] = await pool.query(
-      'SELECT * FROM store_lottery_inventory WHERE store_id = ? AND lottery_type_id = ?',
+      'SELECT * FROM STORE_LOTTERY_INVENTORY WHERE store_id = ? AND lottery_type_id = ?',
       [storeId, lotteryTypeId]
     );
 

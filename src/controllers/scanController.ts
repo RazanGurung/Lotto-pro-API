@@ -157,8 +157,8 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
     const inventoryStatus = soldCount >= totalTickets ? 'finished' : 'active';
 
     const [inventoryRows] = await pool.query(
-      `SELECT * FROM store_lottery_inventory
-       WHERE store_id = ? AND lottery_type_id = ? AND serial_number = ?`,
+      `SELECT * FROM STORE_LOTTERY_INVENTORY
+       WHERE store_id = ? AND lottery_id = ? AND serial_number = ?`,
       [store_id, master.lottery_id, parsedScan.ticketSerial]
     );
 
@@ -166,8 +166,8 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
 
     if ((inventoryRows as any[]).length === 0) {
       const [insertResult] = await pool.query(
-        `INSERT INTO store_lottery_inventory
-          (store_id, lottery_type_id, serial_number, total_count, current_count, status)
+        `INSERT INTO STORE_LOTTERY_INVENTORY
+          (store_id, lottery_id, serial_number, total_count, current_count, status)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
           store_id,
@@ -181,7 +181,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
 
       const newId = (insertResult as any).insertId;
       const [newInventory] = await pool.query(
-        'SELECT * FROM store_lottery_inventory WHERE id = ?',
+        'SELECT * FROM STORE_LOTTERY_INVENTORY WHERE id = ?',
         [newId]
       );
       inventory = (newInventory as any[])[0];
@@ -189,7 +189,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       inventory = (inventoryRows as any[])[0];
 
       await pool.query(
-        `UPDATE store_lottery_inventory
+        `UPDATE STORE_LOTTERY_INVENTORY
          SET total_count = ?,
              current_count = ?,
              status = ?,
@@ -199,7 +199,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       );
 
       const [updatedInventory] = await pool.query(
-        'SELECT * FROM store_lottery_inventory WHERE id = ?',
+        'SELECT * FROM STORE_LOTTERY_INVENTORY WHERE id = ?',
         [inventory.id]
       );
       inventory = (updatedInventory as any[])[0];
