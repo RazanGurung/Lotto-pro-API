@@ -13,27 +13,49 @@ interface ParsedScanPayload {
 const parseScanInput = (payload: ScanTicketRequest): ParsedScanPayload => {
   if (payload.barcode_data) {
     const raw = payload.barcode_data.trim();
-    const parts = raw.split('-');
 
-    if (parts.length === 3) {
-      const [lotteryNumber, ticketSerial, pack] = parts;
-      const packNumber = parseInt(pack, 10);
+    if (raw.includes('-')) {
+      const parts = raw.split('-');
 
-      if (
-        lotteryNumber &&
-        ticketSerial &&
-        !isNaN(packNumber)
-      ) {
-        return {
-          lotteryNumber,
-          ticketSerial,
-          packNumber,
-          raw,
-        };
+      if (parts.length === 3) {
+        const [lotteryNumber, ticketSerial, pack] = parts;
+        const packNumber = parseInt(pack, 10);
+
+        if (lotteryNumber && ticketSerial && !isNaN(packNumber)) {
+          return {
+            lotteryNumber,
+            ticketSerial,
+            packNumber,
+            raw,
+          };
+        }
       }
+
+      throw new Error('Invalid barcode format. Expected XXX-YYYYYY-ZZZ');
     }
 
-    throw new Error('Invalid barcode format. Expected XXX-YYYYYY-ZZZ');
+    const numeric = raw.replace(/\s+/g, '');
+    if (!/^\d+$/.test(numeric) || numeric.length < 12) {
+      throw new Error(
+        'Invalid barcode format. Expected digits string with at least 12 characters'
+      );
+    }
+
+    const lotteryNumber = numeric.substring(0, 3);
+    const ticketSerial = numeric.substring(3, 9);
+    const packSegment = numeric.substring(numeric.length - 3);
+    const packNumber = parseInt(packSegment, 10);
+
+    if (isNaN(packNumber)) {
+      throw new Error('Invalid barcode format: pack number not numeric');
+    }
+
+    return {
+      lotteryNumber,
+      ticketSerial,
+      packNumber,
+      raw,
+    };
   }
 
   if (
