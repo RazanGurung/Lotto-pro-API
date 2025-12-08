@@ -58,25 +58,13 @@ export const getStoreInventory = async (req: AuthRequest, res: Response): Promis
     // Get inventory with lottery type details
     const [result] = await pool.query(
       `SELECT
-        sli.id,
-        sli.store_id,
-        sli.lottery_id,
-        sli.serial_number,
-        sli.total_count,
-        sli.current_count,
-        lm.lottery_name,
-        lm.lottery_number,
-        lm.price,
-        lm.launch_date,
-        lm.state,
-        lm.image_url,
-        lm.start_number,
-        lm.end_number,
-        lm.status
-      FROM STORE_LOTTERY_INVENTORY sli
-      JOIN LOTTERY_MASTER lm ON sli.lottery_id = lm.lottery_id
-      WHERE sli.store_id = ?
-      ORDER BY lm.price, lm.lottery_name`,
+        id,
+        store_id,
+        lottery_id,
+        status
+      FROM STORE_LOTTERY_INVENTORY
+      WHERE store_id = ?
+      ORDER BY updated_at DESC`,
       [storeId]
     );
 
