@@ -44,7 +44,9 @@ const parseScanInput = (payload: ScanTicketRequest): ParsedScanPayload => {
     const lotteryNumber = numeric.substring(0, 3);
     const packSegment = numeric.substring(numeric.length - 3);
     const packNumber = parseInt(packSegment, 10);
-    const ticketSerial = numeric.substring(3, numeric.length - 3);
+    const middleSegment = numeric.substring(3, numeric.length - 3);
+    const ticketSerial =
+      middleSegment.length >= 6 ? middleSegment.substring(0, 6) : middleSegment;
 
     return {
       lotteryNumber,
