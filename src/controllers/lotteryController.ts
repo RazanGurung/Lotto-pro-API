@@ -5,23 +5,37 @@ import { AuthRequest } from '../middleware/auth';
 export const getLotteryTypes = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    let state: string | null = null;
+    const storeIdParam = req.query.storeId as string | undefined;
+    const stateParam = req.query.state as string | undefined;
 
-    if (userId) {
-      const [ownerRows] = await pool.query(
-        'SELECT state FROM STORES WHERE owner_id = ? AND state IS NOT NULL LIMIT 1',
-        [userId]
+    let filterState: string | null = null;
+
+    if (stateParam && typeof stateParam === 'string' && stateParam.trim() !== '') {
+      filterState = stateParam.trim();
+    } else if (storeIdParam) {
+      const storeId = Number(storeIdParam);
+      if (isNaN(storeId)) {
+        res.status(400).json({ error: 'storeId must be a number' });
+        return;
+      }
+
+      const [storeRows] = await pool.query(
+        'SELECT state FROM STORES WHERE store_id = ? AND owner_id = ?',
+        [storeId, userId]
       );
 
-      if ((ownerRows as any[]).length > 0) {
-        state = (ownerRows as any[])[0].state || null;
+      if ((storeRows as any[]).length === 0) {
+        res.status(404).json({ error: 'Store not found for this owner' });
+        return;
       }
+
+      filterState = (storeRows as any[])[0].state || null;
     }
 
-    const [result] = state
+    const [result] = filterState
       ? await pool.query(
           "SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url FROM LOTTERY_MASTER WHERE status = 'active' AND state = ? ORDER BY price, lottery_name",
-          [state]
+          [filterState]
         )
       : await pool.query(
           "SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url FROM LOTTERY_MASTER WHERE status = 'active' ORDER BY price, lottery_name"
