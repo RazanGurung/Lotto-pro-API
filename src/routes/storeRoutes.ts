@@ -19,6 +19,11 @@ router.get(
   storeAccessAuthMiddleware,
   asyncHandler(getClerkStoreDashboard)
 );
+router.get(
+  '/clerk/:storeId',
+  storeAccessAuthMiddleware,
+  asyncHandler(getClerkStoreDashboard)
+);
 
 router.use(authMiddleware);
 
