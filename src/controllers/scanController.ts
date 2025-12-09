@@ -55,15 +55,18 @@ const parseScanInput = (payload: ScanTicketRequest): ParsedScanPayload => {
     };
   }
 
+  const directTicketNumber =
+    payload.pack_number ?? payload.ticket_number;
+
   if (
     payload.lottery_number &&
     payload.ticket_serial &&
-    payload.pack_number !== undefined
+    directTicketNumber !== undefined
   ) {
-    const packNumber = Number(payload.pack_number);
+    const packNumber = Number(directTicketNumber);
 
     if (isNaN(packNumber)) {
-      throw new Error('pack_number must be a number');
+      throw new Error('ticket number must be a number');
     }
 
     return {
@@ -75,7 +78,7 @@ const parseScanInput = (payload: ScanTicketRequest): ParsedScanPayload => {
   }
 
   throw new Error(
-    'Provide either barcode_data or lottery_number, ticket_serial, and pack_number'
+    'Provide either barcode_data or lottery_number, ticket_serial, and ticket_number'
   );
 };
 
@@ -83,24 +86,59 @@ const calculateTotalTickets = (startNumber: number, endNumber: number): number =
   return Math.abs(endNumber - startNumber) + 1;
 };
 
-const calculateSoldCount = (
+type DirectionValue = 'asc' | 'desc';
+
+const parseDirectionInput = (value?: string): DirectionValue | undefined => {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'asc' || normalized === 'desc') {
+    return normalized;
+  }
+  throw new Error('Direction must be either "asc" or "desc"');
+};
+
+const calculateUnsoldCount = (
   startNumber: number,
   endNumber: number,
-  packNumber: number
+  currentTicket: number,
+  direction: DirectionValue
 ): number => {
   const totalTickets = calculateTotalTickets(startNumber, endNumber);
-  let sold: number;
+  const minNumber = Math.min(startNumber, endNumber);
+  const maxNumber = Math.max(startNumber, endNumber);
 
-  if (startNumber <= endNumber) {
-    sold = packNumber - startNumber;
+  let ticket = currentTicket;
+  if (ticket < minNumber) ticket = minNumber;
+  if (ticket > maxNumber) ticket = maxNumber;
+
+  const ascendingGame = startNumber <= endNumber;
+  let remaining: number;
+
+  if (ascendingGame) {
+    remaining =
+      direction === 'asc'
+        ? endNumber - ticket + 1
+        : ticket - startNumber + 1;
   } else {
-    sold = startNumber - packNumber;
+    remaining =
+      direction === 'asc'
+        ? ticket - endNumber + 1
+        : startNumber - ticket + 1;
   }
 
-  if (sold < 0) sold = 0;
-  if (sold > totalTickets) sold = totalTickets;
+  if (remaining < 0) remaining = 0;
+  if (remaining > totalTickets) remaining = totalTickets;
 
-  return sold;
+  return remaining;
+};
+
+const resolveStatus = (
+  remaining: number,
+  total: number
+): 'inactive' | 'active' | 'finished' => {
+  if (remaining <= 0) return 'finished';
+  if (remaining >= total) return 'inactive';
+  return 'active';
 };
 
 export const scanTicket = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -120,6 +158,14 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       parsedScan = parseScanInput(req.body);
     } catch (parseError) {
       res.status(400).json({ error: (parseError as Error).message });
+      return;
+    }
+
+    let directionInput: DirectionValue | undefined;
+    try {
+      directionInput = parseDirectionInput(req.body.direction);
+    } catch (dirError) {
+      res.status(400).json({ error: (dirError as Error).message });
       return;
     }
 
@@ -151,26 +197,19 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    const totalTicketsFromMaster = calculateTotalTickets(
+    const totalTickets = calculateTotalTickets(
       master.start_number,
       master.end_number
     );
-    const totalTickets = totalTicketsFromMaster;
 
-    let soldCount = 0;
-    if (parsedScan.packNumber !== undefined) {
-      soldCount = calculateSoldCount(
-        master.start_number,
-        master.end_number,
-        parsedScan.packNumber
-      );
+    if (parsedScan.packNumber === undefined) {
+      res.status(400).json({
+        error: 'Ticket number is required in the scan payload',
+      });
+      return;
     }
 
-    const resolveStatus = (current: number, total: number): 'inactive' | 'active' | 'finished' => {
-      if (current >= total) return 'finished';
-      if (current > 0) return 'active';
-      return 'inactive';
-    };
+    const currentTicketNumber = parsedScan.packNumber;
 
     const [inventoryRows] = await pool.query(
       `SELECT * FROM STORE_LOTTERY_INVENTORY
@@ -181,19 +220,32 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
     let inventory;
 
     if ((inventoryRows as any[]).length === 0) {
-      const initialSold = parsedScan.packNumber !== undefined ? soldCount : 0;
-      const inventoryStatus = resolveStatus(initialSold, totalTickets);
+      if (!directionInput) {
+        res
+          .status(400)
+          .json({ error: 'Direction is required for the first scan of a book' });
+        return;
+      }
+
+      const unsoldCount = calculateUnsoldCount(
+        master.start_number,
+        master.end_number,
+        currentTicketNumber,
+        directionInput
+      );
+      const inventoryStatus = resolveStatus(unsoldCount, totalTickets);
       const [insertResult] = await pool.query(
         `INSERT INTO STORE_LOTTERY_INVENTORY
-          (store_id, lottery_id, serial_number, total_count, current_count, status)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+          (store_id, lottery_id, serial_number, total_count, current_count, status, direction)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           store_id,
           master.lottery_id,
           parsedScan.ticketSerial,
           totalTickets,
-          initialSold,
+          unsoldCount,
           inventoryStatus,
+          directionInput,
         ]
       );
 
@@ -206,21 +258,49 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
     } else {
       inventory = (inventoryRows as any[])[0];
 
-      let newSoldCount = inventory.current_count;
-      if (parsedScan.packNumber !== undefined) {
-        newSoldCount = soldCount;
+      const storedDirection =
+        inventory.direction === 'asc' || inventory.direction === 'desc'
+          ? (inventory.direction as DirectionValue)
+          : 'unknown';
+
+      let directionToUse: DirectionValue;
+
+      if (storedDirection === 'unknown') {
+        if (!directionInput) {
+          res.status(400).json({
+            error: 'Direction is required for this book before scanning',
+          });
+          return;
+        }
+        directionToUse = directionInput;
+      } else {
+        if (directionInput && directionInput !== storedDirection) {
+          res.status(400).json({
+            error: `Book direction already set to "${storedDirection}".`,
+          });
+          return;
+        }
+        directionToUse = storedDirection;
       }
 
-      const inventoryStatus = resolveStatus(newSoldCount, totalTickets);
+      const unsoldCount = calculateUnsoldCount(
+        master.start_number,
+        master.end_number,
+        currentTicketNumber,
+        directionToUse
+      );
+
+      const inventoryStatus = resolveStatus(unsoldCount, totalTickets);
 
       await pool.query(
         `UPDATE STORE_LOTTERY_INVENTORY
          SET total_count = ?,
              current_count = ?,
              status = ?,
+             direction = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [totalTickets, newSoldCount, inventoryStatus, inventory.id]
+        [totalTickets, unsoldCount, inventoryStatus, directionToUse, inventory.id]
       );
 
       const [updatedInventory] = await pool.query(
@@ -249,10 +329,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       console.warn('Failed to log scan event:', logError);
     }
 
-    const remainingTickets = Math.max(
-      inventory.total_count - inventory.current_count,
-      0
-    );
+    const remainingTickets = Math.max(inventory.current_count, 0);
 
     res.status(200).json({
       status: 'ok',
@@ -277,6 +354,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
         serial_number: inventory.serial_number,
         total_count: inventory.total_count,
         current_count: inventory.current_count,
+        direction: inventory.direction,
         remaining_tickets: remainingTickets,
         status: inventory.status,
         updated_at: inventory.updated_at,

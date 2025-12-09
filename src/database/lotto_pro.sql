@@ -66,6 +66,7 @@ CREATE TABLE STORE_LOTTERY_INVENTORY (
     serial_number VARCHAR(32),
     total_count INT NOT NULL,
     current_count INT NOT NULL,
+    direction ENUM('unknown','asc','desc') DEFAULT 'unknown',
     status ENUM('inactive','active','finished') DEFAULT 'inactive',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

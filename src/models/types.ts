@@ -46,6 +46,7 @@ export interface StoreLotteryInventory {
   serial_number?: string;
   total_count: number;
   current_count: number;
+  direction?: 'unknown' | 'asc' | 'desc';
   status?: string;
   created_at: Date;
   updated_at: Date;
@@ -111,6 +112,8 @@ export interface ScanTicketRequest {
   lottery_number?: string;
   ticket_serial?: string;
   pack_number?: number;
+  ticket_number?: number;
+  direction?: 'asc' | 'desc';
 }
 
 export interface DecodedBarcodeData {
