@@ -82,7 +82,17 @@ const isSuperAdminEmail = (email: string): boolean => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password }: LoginRequest = req.body;
+    const {
+      email,
+      password,
+      lottery_ac_no,
+      lottery_pw,
+    }: LoginRequest & Partial<StoreLoginRequest> = req.body;
+
+    if (lottery_ac_no && lottery_pw) {
+      await storeAccountLogin(req, res);
+      return;
+    }
 
     // Validate input
     if (!email || !password) {
