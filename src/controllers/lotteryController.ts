@@ -1,27 +1,18 @@
 import { Response } from 'express';
 import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
+import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
 
 export const getLotteryTypes = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
     const storeId = Number(req.params.storeId);
     if (isNaN(storeId)) {
       res.status(400).json({ error: 'storeId must be a number' });
       return;
     }
 
-    const [storeRows] = await pool.query(
-      'SELECT state FROM STORES WHERE store_id = ? AND owner_id = ?',
-      [storeId, userId]
-    );
-
-    if ((storeRows as any[]).length === 0) {
-      res.status(404).json({ error: 'Store not found for this owner' });
-      return;
-    }
-
-    const storeState = (storeRows as any[])[0].state;
+    const store = await authorizeStoreAccess(storeId, req.user);
+    const storeState = store.state;
 
     const [result] = storeState
       ? await pool.query(
@@ -34,6 +25,10 @@ export const getLotteryTypes = async (req: AuthRequest, res: Response): Promise<
 
     res.status(200).json({ lotteryTypes: result });
   } catch (error) {
+    if (error instanceof StoreAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     console.error('Get lottery types error:', error);
     res.status(500).json({ error: 'Server error' });
   }
@@ -41,19 +36,9 @@ export const getLotteryTypes = async (req: AuthRequest, res: Response): Promise<
 
 export const getStoreInventory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
     const storeId = parseInt(req.params.storeId);
 
-    // Verify store ownership
-    const [storeCheck] = await pool.query(
-      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
-      [storeId, userId]
-    );
-
-    if ((storeCheck as any[]).length === 0) {
-      res.status(404).json({ error: 'Store not found' });
-      return;
-    }
+    await authorizeStoreAccess(storeId, req.user);
 
     // Get inventory with lottery type details
     const [result] = await pool.query(
@@ -74,6 +59,10 @@ export const getStoreInventory = async (req: AuthRequest, res: Response): Promis
 
     res.status(200).json({ inventory: result });
   } catch (error) {
+    if (error instanceof StoreAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     console.error('Get store inventory error:', error);
     res.status(500).json({ error: 'Server error' });
   }
@@ -81,20 +70,10 @@ export const getStoreInventory = async (req: AuthRequest, res: Response): Promis
 
 export const getLotteryDetail = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
     const storeId = parseInt(req.params.storeId);
     const lotteryTypeId = parseInt(req.params.lotteryTypeId);
 
-    // Verify store ownership
-    const [storeCheck] = await pool.query(
-      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
-      [storeId, userId]
-    );
-
-    if ((storeCheck as any[]).length === 0) {
-      res.status(404).json({ error: 'Store not found' });
-      return;
-    }
+    await authorizeStoreAccess(storeId, req.user);
 
     // Get inventory details
     const [inventoryResult] = await pool.query(
@@ -141,6 +120,10 @@ export const getLotteryDetail = async (req: AuthRequest, res: Response): Promise
       tickets: ticketsResult,
     });
   } catch (error) {
+    if (error instanceof StoreAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     console.error('Get lottery detail error:', error);
     res.status(500).json({ error: 'Server error' });
   }
@@ -148,19 +131,14 @@ export const getLotteryDetail = async (req: AuthRequest, res: Response): Promise
 
 export const updateInventory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
     const storeId = parseInt(req.params.storeId);
     const lotteryTypeId = parseInt(req.params.lotteryTypeId);
     const { total_count, current_count } = req.body;
 
-    // Verify store ownership
-    const [storeCheck] = await pool.query(
-      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
-      [storeId, userId]
-    );
+    await authorizeStoreAccess(storeId, req.user);
 
-    if ((storeCheck as any[]).length === 0) {
-      res.status(404).json({ error: 'Store not found' });
+    if (req.user?.role !== 'store_owner') {
+      res.status(403).json({ error: 'Only store owners can update inventory' });
       return;
     }
 
@@ -190,6 +168,10 @@ export const updateInventory = async (req: AuthRequest, res: Response): Promise<
       message: 'Inventory updated successfully',
     });
   } catch (error) {
+    if (error instanceof StoreAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     console.error('Update inventory error:', error);
     res.status(500).json({ error: 'Server error' });
   }

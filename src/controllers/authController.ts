@@ -158,7 +158,7 @@ const handleStoreAccountLogin = async (
       created_at: store.created_at,
     },
     token,
-    redirectTo: `/api/lottery/store/${store.store_id}/inventory`,
+    redirectTo: `/api/stores/clerk/${store.store_id}/dashboard`,
     message: 'Store account login successful',
   });
 };

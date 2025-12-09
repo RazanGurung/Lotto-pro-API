@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { CreateStoreRequest } from '../models/types';
+import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
 import { hashPassword } from '../utils/auth';
 
 export const getStores = async (
@@ -342,3 +343,41 @@ const isValidLotteryAccountNumber = (value: string): boolean =>
   /^\d{8}$/.test(value);
 
 const isValidLotteryPin = (value: string): boolean => /^\d{4}$/.test(value);
+
+export const getClerkStoreDashboard = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const storeId = parseInt(req.params.storeId);
+    const store = await authorizeStoreAccess(storeId, req.user);
+
+    const [inventory] = await pool.query(
+      `SELECT
+        id,
+        store_id,
+        lottery_id,
+        serial_number,
+        total_count,
+        current_count,
+        status,
+        created_at
+      FROM STORE_LOTTERY_INVENTORY
+      WHERE store_id = ?
+      ORDER BY updated_at DESC`,
+      [storeId]
+    );
+
+    res.status(200).json({
+      store,
+      inventory,
+    });
+  } catch (error) {
+    if (error instanceof StoreAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    console.error('Get clerk store dashboard error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};

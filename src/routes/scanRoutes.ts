@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { scanTicket, getScanHistory } from '../controllers/scanController';
-import { authMiddleware } from '../middleware/auth';
+import { storeAccessAuthMiddleware } from '../middleware/auth';
 
 const router = Router();
 
 // All scan routes require authentication
-router.use(authMiddleware);
+router.use(storeAccessAuthMiddleware);
 
 router.post('/scan', scanTicket);
 router.get('/scan/history/:storeId', getScanHistory);

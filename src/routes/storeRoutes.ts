@@ -5,14 +5,20 @@ import {
   createStore,
   updateStore,
   deleteStore,
+  getClerkStoreDashboard,
 } from '../controllers/storeController';
 import { storeAccountLogin } from '../controllers/authController';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, storeAccessAuthMiddleware } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
 router.post('/login', asyncHandler(storeAccountLogin));
+router.get(
+  '/clerk/:storeId/dashboard',
+  storeAccessAuthMiddleware,
+  asyncHandler(getClerkStoreDashboard)
+);
 
 router.use(authMiddleware);
 

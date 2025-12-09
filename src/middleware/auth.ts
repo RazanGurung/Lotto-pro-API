@@ -56,6 +56,34 @@ export const authMiddleware = (
   }
 };
 
+export const storeAccessAuthMiddleware = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'No token provided' });
+      return;
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = verifyToken(token);
+
+    if (decoded.role !== 'store_owner' && decoded.role !== 'store_account') {
+      res.status(403).json({ error: 'Store owner or store account access required' });
+      return;
+    }
+
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
 export const superAdminAuthMiddleware = (
   req: AuthRequest,
   res: Response,

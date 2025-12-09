@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { ScanTicketRequest } from '../models/types';
+import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
 
 interface ParsedScanPayload {
   lotteryNumber: string;
@@ -104,7 +105,6 @@ const calculateSoldCount = (
 
 export const scanTicket = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
     const { store_id }: ScanTicketRequest = req.body;
 
     if (!store_id) {
@@ -112,16 +112,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    // Verify store ownership
-    const [storeCheck] = await pool.query(
-      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
-      [store_id, userId]
-    );
-
-    if ((storeCheck as any[]).length === 0) {
-      res.status(404).json({ error: 'Store not found' });
-      return;
-    }
+    await authorizeStoreAccess(store_id, req.user);
 
     let parsedScan: ParsedScanPayload;
 
@@ -248,7 +239,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
           parsedScan.raw,
           master.lottery_id,
           parsedScan.packNumber,
-          userId,
+          req.user?.id,
         ]
       );
     } catch (logError) {
@@ -289,6 +280,10 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       },
     });
   } catch (error) {
+    if (error instanceof StoreAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     console.error('Scan ticket error:', error);
     res.status(500).json({ error: 'Server error during ticket scan' });
   }
@@ -296,20 +291,10 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
 
 export const getScanHistory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
     const storeId = parseInt(req.params.storeId);
     const limit = parseInt(req.query.limit as string) || 50;
 
-    // Verify store ownership
-    const [storeCheck] = await pool.query(
-      'SELECT * FROM STORES WHERE store_id = ? AND owner_id = ?',
-      [storeId, userId]
-    );
-
-    if ((storeCheck as any[]).length === 0) {
-      res.status(404).json({ error: 'Store not found' });
-      return;
-    }
+    await authorizeStoreAccess(storeId, req.user);
 
     const [result] = await pool.query(
       `SELECT
@@ -328,6 +313,10 @@ export const getScanHistory = async (req: AuthRequest, res: Response): Promise<v
 
     res.status(200).json({ scanHistory: result });
   } catch (error) {
+    if (error instanceof StoreAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     console.error('Get scan history error:', error);
     res.status(500).json({ error: 'Server error' });
   }
