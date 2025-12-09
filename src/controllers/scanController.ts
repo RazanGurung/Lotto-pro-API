@@ -230,6 +230,9 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
       inventory = (updatedInventory as any[])[0];
     }
 
+    const scannedBy =
+      req.user?.role === 'store_owner' ? req.user?.id : null;
+
     try {
       await pool.query(
         `INSERT INTO SCANNED_TICKETS (store_id, barcode_data, lottery_type_id, ticket_number, scanned_by)
@@ -239,7 +242,7 @@ export const scanTicket = async (req: AuthRequest, res: Response): Promise<void>
           parsedScan.raw,
           master.lottery_id,
           parsedScan.packNumber,
-          req.user?.id,
+          scannedBy,
         ]
       );
     } catch (logError) {
