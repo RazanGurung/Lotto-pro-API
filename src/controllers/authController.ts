@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import type { PoolConnection } from 'mysql2/promise';
 import { pool } from '../config/database';
 import { hashPassword, comparePassword, generateToken } from '../utils/auth';
-import { LoginRequest, RegisterRequest, SuperAdmin } from '../models/types';
+import { LoginRequest, RegisterRequest, StoreLoginRequest, SuperAdmin } from '../models/types';
 import { AuthRequest } from '../middleware/auth';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -189,6 +189,77 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Server error during login' });
+  }
+};
+
+export const storeAccountLogin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { lottery_ac_no, lottery_pw }: StoreLoginRequest = req.body;
+
+    if (!lottery_ac_no || !lottery_pw) {
+      res
+        .status(400)
+        .json({ error: 'Lottery account number and password are required' });
+      return;
+    }
+
+    if (!/^\d{8}$/.test(lottery_ac_no)) {
+      res.status(400).json({ error: 'Lottery account number must be 8 digits' });
+      return;
+    }
+
+    if (!/^\d{4}$/.test(lottery_pw)) {
+      res.status(400).json({ error: 'Lottery password must be 4 digits' });
+      return;
+    }
+
+    const [stores] = await pool.query(
+      'SELECT * FROM STORES WHERE lottery_ac_no = ?',
+      [lottery_ac_no]
+    );
+
+    if ((stores as any[]).length === 0) {
+      res.status(401).json({ error: 'Invalid lottery credentials' });
+      return;
+    }
+
+    const store = (stores as any[])[0];
+
+    const isValidPassword = await comparePassword(
+      lottery_pw,
+      store.lottery_pw
+    );
+
+    if (!isValidPassword) {
+      res.status(401).json({ error: 'Invalid lottery credentials' });
+      return;
+    }
+
+    const token = generateToken({
+      id: store.store_id,
+      email: `${store.lottery_ac_no}@store.lotto`,
+      full_name: store.store_name,
+      role: 'store_account',
+    });
+
+    res.status(200).json({
+      store: {
+        id: store.store_id,
+        owner_id: store.owner_id,
+        store_name: store.store_name,
+        address: store.address,
+        city: store.city,
+        state: store.state,
+        zipcode: store.zipcode,
+        lottery_ac_no: store.lottery_ac_no,
+        created_at: store.created_at,
+      },
+      token,
+      message: 'Store account login successful',
+    });
+  } catch (error) {
+    console.error('Store account login error:', error);
+    res.status(500).json({ error: 'Server error during store login' });
   }
 };
 

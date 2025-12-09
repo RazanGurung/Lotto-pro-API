@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   register,
   login,
+  storeAccountLogin,
   getProfile,
   updateStoreOwnerProfile,
   deleteStoreOwnerAccount,
@@ -14,6 +15,7 @@ const router = Router();
 // Public routes
 router.post('/register', asyncHandler(register));
 router.post('/login', asyncHandler(login));
+router.post('/store/login', asyncHandler(storeAccountLogin));
 
 // Protected routes
 router.get('/profile', generalAuthMiddleware, asyncHandler(getProfile));

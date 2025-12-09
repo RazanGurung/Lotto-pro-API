@@ -110,6 +110,11 @@ export interface ScanTicketRequest {
   pack_number?: number;
 }
 
+export interface StoreLoginRequest {
+  lottery_ac_no: string;
+  lottery_pw: string;
+}
+
 export interface DecodedBarcodeData {
   lottery_number?: string;
   ticket_serial?: string;
