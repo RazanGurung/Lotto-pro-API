@@ -47,12 +47,22 @@ const parseScanInput = (payload: ScanTicketRequest): ParsedScanPayload => {
     const packSegment = numeric.substring(9, 12);
     const packNumber = parseInt(packSegment, 10);
 
-    return {
+    const parsedPayload: ParsedScanPayload = {
       lotteryNumber,
       ticketSerial,
       packNumber: isNaN(packNumber) ? undefined : packNumber,
       raw,
     };
+
+    if (payload.ticket_number !== undefined) {
+      const manualTicket = Number(payload.ticket_number);
+      if (isNaN(manualTicket)) {
+        throw new Error('ticket_number must be a number');
+      }
+      parsedPayload.packNumber = manualTicket;
+    }
+
+    return parsedPayload;
   }
 
   const directTicketNumber =
