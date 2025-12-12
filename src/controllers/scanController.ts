@@ -342,7 +342,7 @@ export const scanTicket = async (
     const ticketsSoldThisScan = Math.max(previousRemaining - newRemaining, 0);
     const salesIncrement = ticketsSoldThisScan * saleAmountPerTicket;
 
-    const scannedBy = req.user?.role === 'store_owner' ? req.user?.id : null;
+    const scannedBy = req.user?.id ?? null;
     let scanLogId: number | null = null;
 
     try {
@@ -443,10 +443,16 @@ export const getScanHistory = async (
         st.*,
         lm.lottery_name as lottery_name,
         lm.price as lottery_price,
-        u.full_name as scanned_by_name
+        COALESCE(so.name, sc.store_name) as scanned_by_name,
+        CASE
+          WHEN so.owner_id IS NOT NULL THEN 'store_owner'
+          WHEN sc.store_id IS NOT NULL THEN 'store_account'
+          ELSE NULL
+        END as scanned_by_role
       FROM SCANNED_TICKETS st
       LEFT JOIN LOTTERY_MASTER lm ON st.lottery_type_id = lm.lottery_id
-      LEFT JOIN users u ON st.scanned_by = u.id
+      LEFT JOIN STORE_OWNER so ON st.scanned_by = so.owner_id
+      LEFT JOIN STORES sc ON st.scanned_by = sc.store_id
       WHERE st.store_id = ?
       ORDER BY st.scanned_at DESC
       LIMIT ?`,
