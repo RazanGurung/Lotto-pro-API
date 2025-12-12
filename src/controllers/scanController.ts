@@ -149,6 +149,22 @@ const resolveStatus = (
   return 'active';
 };
 
+const normalizeDirection = (value?: string): DirectionValue => {
+  return value === 'desc' ? 'desc' : 'asc';
+};
+
+const calculateTicketsSoldBetween = (
+  openingTicket: number,
+  closingTicket: number,
+  direction: DirectionValue
+): number => {
+  const diff =
+    direction === 'desc'
+      ? openingTicket - closingTicket
+      : closingTicket - openingTicket;
+  return diff < 0 ? 0 : diff;
+};
+
 export const scanTicket = async (
   req: AuthRequest,
   res: Response
@@ -331,6 +347,7 @@ export const scanTicket = async (
 
     const scannedBy = req.user?.role === 'store_owner' ? req.user?.id : null;
     let scanLogId: number | null = null;
+    const reportDirection = normalizeDirection(inventory.direction);
 
     try {
       const [scanResult] = await pool.query(
@@ -351,18 +368,58 @@ export const scanTicket = async (
 
     if (scanLogId) {
       try {
-        const saleAmount = Number(master.price) || 0;
-        await pool.query(
-          `INSERT INTO DAILY_REPORT
-            (store_id, lottery_id, book_id, scan_id, report_date, tickets_sold, total_sales)
-           VALUES (?, ?, ?, ?, CURDATE(), 1, ?)
-           ON DUPLICATE KEY UPDATE
-             scan_id = VALUES(scan_id),
-             tickets_sold = tickets_sold + 1,
-             total_sales = total_sales + VALUES(total_sales),
-             updated_at = CURRENT_TIMESTAMP`,
-          [store_id, master.lottery_id, inventory.id, scanLogId, saleAmount]
+        const saleAmountPerTicket = Number(master.price) || 0;
+        const [existingReports] = await pool.query(
+          `SELECT report_id, opening_ticket
+           FROM DAILY_REPORT
+           WHERE store_id = ?
+             AND lottery_id = ?
+             AND book_id = ?
+             AND report_date = CURDATE()`,
+          [store_id, master.lottery_id, inventory.id]
         );
+
+        if ((existingReports as any[]).length === 0) {
+          await pool.query(
+            `INSERT INTO DAILY_REPORT
+              (store_id, lottery_id, book_id, scan_id, report_date, opening_ticket, closing_ticket, tickets_sold, total_sales)
+             VALUES (?, ?, ?, ?, CURDATE(), ?, ?, 0, 0)`,
+            [
+              store_id,
+              master.lottery_id,
+              inventory.id,
+              scanLogId,
+              currentTicketNumber,
+              currentTicketNumber,
+            ]
+          );
+        } else {
+          const reportRow = (existingReports as any[])[0];
+          const openingTicket = Number(reportRow.opening_ticket) || 0;
+          const ticketsSold = calculateTicketsSoldBetween(
+            openingTicket,
+            currentTicketNumber,
+            reportDirection
+          );
+          const totalSales = ticketsSold * saleAmountPerTicket;
+
+          await pool.query(
+            `UPDATE DAILY_REPORT
+             SET closing_ticket = ?,
+                 tickets_sold = ?,
+                 total_sales = ?,
+                 scan_id = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE report_id = ?`,
+            [
+              currentTicketNumber,
+              ticketsSold,
+              totalSales,
+              scanLogId,
+              reportRow.report_id,
+            ]
+          );
+        }
       } catch (reportError) {
         console.warn('Failed to persist daily report entry:', reportError);
       }

@@ -273,6 +273,8 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
         dr.book_id,
         dr.scan_id,
         dr.report_date,
+        dr.opening_ticket,
+        dr.closing_ticket,
         dr.tickets_sold,
         dr.total_sales,
         lm.lottery_name,

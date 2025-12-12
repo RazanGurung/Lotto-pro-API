@@ -59,6 +59,8 @@ export interface DailyReport {
   book_id: number;
   scan_id: number;
   report_date: string;
+  opening_ticket: number;
+  closing_ticket: number;
   tickets_sold: number;
   total_sales: number;
   created_at: Date;
