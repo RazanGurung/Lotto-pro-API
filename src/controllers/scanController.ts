@@ -143,8 +143,17 @@ const calculateUnsoldCount = (
 const normalizeDigits = (value: string): string => value.replace(/\D/g, '');
 
 const buildBookDigitsPrefix = (
-  payload: ParsedScanPayload
+  payload: ParsedScanPayload,
+  lotteryNumber?: string,
+  inventorySerial?: string | null
 ): string | null => {
+  const canonical = normalizeDigits(
+    `${lotteryNumber ?? ''}${inventorySerial ?? ''}`
+  );
+  if (canonical) {
+    return canonical;
+  }
+
   const baseDigits = normalizeDigits(payload.raw);
   const expectedLength =
     (payload.lotteryNumber?.length || 0) +
@@ -163,43 +172,6 @@ const buildBookDigitsPrefix = (
   );
 
   return fallback || baseDigits || null;
-};
-
-const deriveTicketNumberFromRemaining = (
-  startNumber: number,
-  endNumber: number,
-  remaining: number,
-  direction: DirectionValue
-): number => {
-  const totalTickets = calculateTotalTickets(startNumber, endNumber);
-  const clampedRemaining = Math.min(Math.max(remaining, 0), totalTickets);
-  const ascendingGame = startNumber <= endNumber;
-  const minNumber = Math.min(startNumber, endNumber);
-  const maxNumber = Math.max(startNumber, endNumber);
-
-  if (clampedRemaining === 0) {
-    return direction === 'asc' ? maxNumber : minNumber;
-  }
-
-  let ticket: number;
-
-  if (ascendingGame) {
-    if (direction === 'asc') {
-      ticket = maxNumber - clampedRemaining + 1;
-    } else {
-      ticket = minNumber + clampedRemaining - 1;
-    }
-  } else {
-    if (direction === 'asc') {
-      ticket = minNumber + clampedRemaining - 1;
-    } else {
-      ticket = maxNumber - clampedRemaining + 1;
-    }
-  }
-
-  if (ticket < minNumber) return minNumber;
-  if (ticket > maxNumber) return maxNumber;
-  return ticket;
 };
 
 const computeTicketDelta = (
@@ -341,7 +313,7 @@ export const scanTicket = async (
           master.lottery_id,
           parsedScan.ticketSerial,
           totalTickets,
-          newRemaining,
+          currentTicketNumber,
           inventoryStatus,
           directionInput,
         ]
@@ -380,16 +352,10 @@ export const scanTicket = async (
         directionToUse = storedDirection;
       }
 
-      const previousRemainingRaw = Number(currentInventory.current_count);
-      const previousRemaining = isNaN(previousRemainingRaw)
-        ? totalTickets
-        : previousRemainingRaw;
-      const previousTicketNumber = deriveTicketNumberFromRemaining(
-        master.start_number,
-        master.end_number,
-        previousRemaining,
-        directionToUse
-      );
+      const previousTicketNumberRaw = Number(currentInventory.current_count);
+      const previousTicketNumber = isNaN(previousTicketNumberRaw)
+        ? null
+        : previousTicketNumberRaw;
       let computedDelta = 0;
       try {
         computedDelta = computeTicketDelta(
@@ -422,7 +388,7 @@ export const scanTicket = async (
          WHERE id = ?`,
         [
           totalTickets,
-          newRemaining,
+          currentTicketNumber,
           inventoryStatus,
           directionToUse,
           currentInventory.id,
@@ -441,10 +407,10 @@ export const scanTicket = async (
       throw new Error('Failed to load inventory record');
     }
 
-    const resolvedDirection: DirectionValue =
+    const resolvedDirection =
       inventory.direction === 'asc' || inventory.direction === 'desc'
         ? (inventory.direction as DirectionValue)
-        : directionInput || 'asc';
+        : undefined;
 
     const scannedBy = req.user?.id ?? null;
     let scanLogId: number | null = null;
@@ -470,7 +436,11 @@ export const scanTicket = async (
       let dailyTicketsSold = ticketsSoldThisScan;
 
       try {
-        const bookDigitsPrefix = buildBookDigitsPrefix(parsedScan);
+        const bookDigitsPrefix = buildBookDigitsPrefix(
+          parsedScan,
+          master.lottery_number,
+          inventory.serial_number
+        );
         if (bookDigitsPrefix) {
           const prefixLength = bookDigitsPrefix.length;
           const [dayRangeRows] = await pool.query(
@@ -489,15 +459,26 @@ export const scanTicket = async (
           const firstTicket = Number(dayRange?.first_ticket);
           const lastTicket = Number(dayRange?.last_ticket);
 
-          if (!isNaN(firstTicket) && !isNaN(lastTicket)) {
-            dailyTicketsSold =
+          if (
+            resolvedDirection &&
+            !isNaN(firstTicket) &&
+            !isNaN(lastTicket)
+          ) {
+            const rawSold =
               resolvedDirection === 'asc'
-                ? Math.max(0, lastTicket - firstTicket)
-                : Math.max(0, firstTicket - lastTicket);
+                ? lastTicket - firstTicket
+                : firstTicket - lastTicket;
+            dailyTicketsSold = Math.max(0, rawSold);
+          } else if (!resolvedDirection) {
+            dailyTicketsSold = 0;
           }
         }
       } catch (rangeError) {
         console.warn('Failed to compute daily ticket range:', rangeError);
+      }
+
+      if (dailyTicketsSold > totalTickets) {
+        dailyTicketsSold = totalTickets;
       }
 
       const dailySales = dailyTicketsSold * saleAmountPerTicket;
@@ -526,7 +507,18 @@ export const scanTicket = async (
       }
     }
 
-    const remainingTickets = Math.max(inventory.current_count, 0);
+    let remainingTickets: number | null = null;
+    if (resolvedDirection) {
+      const currentTicketValue = Number(inventory.current_count);
+      if (!isNaN(currentTicketValue)) {
+        remainingTickets = calculateUnsoldCount(
+          master.start_number,
+          master.end_number,
+          currentTicketValue,
+          resolvedDirection
+        );
+      }
+    }
 
     res.status(200).json({
       status: 'ok',
