@@ -502,6 +502,29 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
 
       const totalSales = ticketsSold * Number(book.price);
 
+      const reportDateString = reportRange.start.toISOString().slice(0, 10);
+      try {
+        await pool.query(
+          `INSERT INTO DAILY_REPORT
+            (store_id, lottery_id, book_id, scan_id, report_date, tickets_sold, total_sales)
+           VALUES (?, ?, ?, NULL, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             tickets_sold = VALUES(tickets_sold),
+             total_sales = VALUES(total_sales),
+             updated_at = CURRENT_TIMESTAMP`,
+          [
+            storeId,
+            book.lottery_id,
+            book.book_id,
+            reportDateString,
+            ticketsSold,
+            totalSales,
+          ]
+        );
+      } catch (persistError) {
+        console.warn('Failed to persist summary into DAILY_REPORT:', persistError);
+      }
+
       breakdown.push({
         book_id: book.book_id,
         lottery_id: book.lottery_id,
