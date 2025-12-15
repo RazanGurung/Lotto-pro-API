@@ -438,7 +438,7 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
       );
 
       const [lastRows] = await pool.query(
-        `SELECT st.ticket_number
+        `SELECT st.id, st.ticket_number
          FROM SCANNED_TICKETS st
          WHERE st.store_id = ?
            AND st.lottery_type_id = ?
@@ -464,6 +464,7 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
       const scansCount = Number((scansCountRows as any[])[0]?.scans_count || 0);
 
       const closingTicketRaw = (lastRows as any[])[0]?.ticket_number;
+      const closingScanId = (lastRows as any[])[0]?.id ?? null;
       const firstTicketRaw = (firstRows as any[])[0]?.ticket_number;
 
       const previousTicket = await fetchTicketSnapshot(
@@ -503,26 +504,30 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
       const totalSales = ticketsSold * Number(book.price);
 
       const reportDateString = reportRange.start.toISOString().slice(0, 10);
-      try {
-        await pool.query(
-          `INSERT INTO DAILY_REPORT
-            (store_id, lottery_id, book_id, scan_id, report_date, tickets_sold, total_sales)
-           VALUES (?, ?, ?, NULL, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE
-             tickets_sold = VALUES(tickets_sold),
-             total_sales = VALUES(total_sales),
-             updated_at = CURRENT_TIMESTAMP`,
-          [
-            storeId,
-            book.lottery_id,
-            book.book_id,
-            reportDateString,
-            ticketsSold,
-            totalSales,
-          ]
-        );
-      } catch (persistError) {
-        console.warn('Failed to persist summary into DAILY_REPORT:', persistError);
+      if (closingScanId) {
+        try {
+          await pool.query(
+            `INSERT INTO DAILY_REPORT
+              (store_id, lottery_id, book_id, scan_id, report_date, tickets_sold, total_sales)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               scan_id = VALUES(scan_id),
+               tickets_sold = VALUES(tickets_sold),
+               total_sales = VALUES(total_sales),
+               updated_at = CURRENT_TIMESTAMP`,
+            [
+              storeId,
+              book.lottery_id,
+              book.book_id,
+              closingScanId,
+              reportDateString,
+              ticketsSold,
+              totalSales,
+            ]
+          );
+        } catch (persistError) {
+          console.warn('Failed to persist summary into DAILY_REPORT:', persistError);
+        }
       }
 
       breakdown.push({
