@@ -278,20 +278,121 @@ export const getSalesAnalytics = async (req: AuthRequest, res: Response): Promis
   }
 };
 
+const startOfDay = (date: Date): Date => {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const toSqlDateTime = (date: Date): string => {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+
+interface ReportRange {
+  start: Date;
+  endExclusive: Date;
+  label: string;
+}
+
+const resolveReportRange = (
+  rangeParam?: string,
+  dateParam?: string,
+  startDateParam?: string,
+  endDateParam?: string
+): ReportRange => {
+  const today = startOfDay(new Date());
+  const normalizeDateInput = (input: string): Date => {
+    const parts = input.split('-').map((part) => parseInt(part, 10));
+    if (parts.length !== 3 || parts.some((n) => isNaN(n))) {
+      throw new Error('Invalid date format. Use YYYY-MM-DD');
+    }
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  };
+
+  switch ((rangeParam || '').toLowerCase()) {
+    case 'last7': {
+      const start = addDays(today, -6);
+      return { start, endExclusive: addDays(today, 1), label: 'last_7_days' };
+    }
+    case 'this_month': {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1);
+      const end = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      return { start, endExclusive: end, label: 'this_month' };
+    }
+    case 'custom': {
+      if (!startDateParam || !endDateParam) {
+        throw new Error('start_date and end_date are required for custom range');
+      }
+      const start = startOfDay(normalizeDateInput(startDateParam));
+      const end = addDays(startOfDay(normalizeDateInput(endDateParam)), 1);
+      if (end <= start) {
+        throw new Error('end_date must be after start_date');
+      }
+      return { start, endExclusive: end, label: 'custom_range' };
+    }
+    case 'date': {
+      if (!dateParam) {
+        throw new Error('date parameter is required for date range');
+      }
+      const base = startOfDay(normalizeDateInput(dateParam));
+      return { start: base, endExclusive: addDays(base, 1), label: 'specific_date' };
+    }
+    case 'today':
+    default: {
+      const base = dateParam ? startOfDay(normalizeDateInput(dateParam)) : today;
+      return { start: base, endExclusive: addDays(base, 1), label: 'today' };
+    }
+  }
+};
+
+const fetchTicketSnapshot = async (
+  storeId: number,
+  lotteryId: number,
+  prefix: string,
+  prefixLength: number,
+  boundarySql: string,
+  params: (number | string)[]
+): Promise<number | null> => {
+  const [rows] = await pool.query(
+    `SELECT st.ticket_number
+     FROM SCANNED_TICKETS st
+     WHERE st.store_id = ?
+       AND st.lottery_type_id = ?
+       AND LEFT(REPLACE(REPLACE(st.barcode_data, '-', ''), ' ', ''), ?) = ?
+       AND ${boundarySql}
+     ORDER BY st.scanned_at DESC, st.id DESC
+     LIMIT 1`,
+    [storeId, lotteryId, prefixLength, prefix, ...params]
+  );
+
+  const ticket = (rows as any[])[0]?.ticket_number;
+  return typeof ticket === 'number' ? ticket : null;
+};
+
 export const getDailySalesReport = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const storeId = parseInt(req.params.storeId);
-    const dateParam = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+    const rangeParam = (req.query.range as string) || (req.query.date ? 'date' : 'today');
+    const dateParam = req.query.date as string | undefined;
+    const startDateParam = req.query.start_date as string | undefined;
+    const endDateParam = req.query.end_date as string | undefined;
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    let reportRange: ReportRange;
+    try {
+      reportRange = resolveReportRange(rangeParam, dateParam, startDateParam, endDateParam);
+    } catch (rangeError) {
+      res.status(400).json({ error: (rangeError as Error).message });
       return;
     }
 
     await authorizeStoreAccess(storeId, req.user);
 
-    const dayStart = `${dateParam} 00:00:00`;
-    const dayEnd = `${dateParam} 23:59:59`;
+    const startSql = toSqlDateTime(reportRange.start);
+    const endSql = toSqlDateTime(reportRange.endExclusive);
 
     const [books] = await pool.query(
       `SELECT
@@ -323,44 +424,74 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
 
       const prefixLength = prefix.length;
 
-      const [dayStatsRows] = await pool.query(
-        `SELECT
-          MIN(st.ticket_number) AS first_ticket,
-          MAX(st.ticket_number) AS last_ticket,
-          COUNT(*) AS scans_count
-        FROM SCANNED_TICKETS st
-        WHERE st.store_id = ?
-          AND st.lottery_type_id = ?
-          AND st.scanned_at >= ?
-          AND st.scanned_at <= ?
-          AND LEFT(REPLACE(REPLACE(st.barcode_data, '-', ''), ' ', ''), ?) = ?`,
-        [storeId, book.lottery_id, dayStart, dayEnd, prefixLength, prefix]
-      );
-
-      const dayStats = (dayStatsRows as any[])[0];
-      if (!dayStats || Number(dayStats.scans_count) === 0) {
-        continue;
-      }
-
-      const [prevRows] = await pool.query(
+      const [firstRows] = await pool.query(
         `SELECT st.ticket_number
          FROM SCANNED_TICKETS st
          WHERE st.store_id = ?
            AND st.lottery_type_id = ?
+           AND st.scanned_at >= ?
+           AND st.scanned_at < ?
+           AND LEFT(REPLACE(REPLACE(st.barcode_data, '-', ''), ' ', ''), ?) = ?
+         ORDER BY st.scanned_at ASC, st.id ASC
+         LIMIT 1`,
+        [storeId, book.lottery_id, startSql, endSql, prefixLength, prefix]
+      );
+
+      const [lastRows] = await pool.query(
+        `SELECT st.ticket_number
+         FROM SCANNED_TICKETS st
+         WHERE st.store_id = ?
+           AND st.lottery_type_id = ?
+           AND st.scanned_at >= ?
            AND st.scanned_at < ?
            AND LEFT(REPLACE(REPLACE(st.barcode_data, '-', ''), ' ', ''), ?) = ?
          ORDER BY st.scanned_at DESC, st.id DESC
          LIMIT 1`,
-        [storeId, book.lottery_id, dayStart, prefixLength, prefix]
+        [storeId, book.lottery_id, startSql, endSql, prefixLength, prefix]
       );
 
-      const previousTicketRaw = (prevRows as any[])[0]?.ticket_number;
-      const firstTicket = Number(dayStats.first_ticket);
-      const lastTicket = Number(dayStats.last_ticket);
+      const [scansCountRows] = await pool.query(
+        `SELECT COUNT(*) as scans_count
+         FROM SCANNED_TICKETS st
+         WHERE st.store_id = ?
+           AND st.lottery_type_id = ?
+           AND st.scanned_at >= ?
+           AND st.scanned_at < ?
+           AND LEFT(REPLACE(REPLACE(st.barcode_data, '-', ''), ' ', ''), ?) = ?`,
+        [storeId, book.lottery_id, startSql, endSql, prefixLength, prefix]
+      );
+
+      const scansCount = Number((scansCountRows as any[])[0]?.scans_count || 0);
+
+      const closingTicketRaw = (lastRows as any[])[0]?.ticket_number;
+      const firstTicketRaw = (firstRows as any[])[0]?.ticket_number;
+
+      const previousTicket = await fetchTicketSnapshot(
+        storeId,
+        book.lottery_id,
+        prefix,
+        prefixLength,
+        'st.scanned_at < ?',
+        [startSql]
+      );
+
+      const closingTicket =
+        typeof closingTicketRaw === 'number'
+          ? closingTicketRaw
+          : typeof previousTicket === 'number'
+            ? previousTicket
+            : null;
+
+      if (closingTicket === null) {
+        continue;
+      }
 
       const openingTicket =
-        typeof previousTicketRaw === 'number' ? Number(previousTicketRaw) : firstTicket;
-      const closingTicket = lastTicket;
+        typeof previousTicket === 'number'
+          ? previousTicket
+          : typeof firstTicketRaw === 'number'
+            ? firstTicketRaw
+            : closingTicket;
 
       let ticketsSold = 0;
       if (book.direction === 'asc') {
@@ -383,7 +514,7 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
         closing_ticket: closingTicket,
         tickets_sold: ticketsSold,
         total_sales: totalSales,
-        scans_count: Number(dayStats.scans_count),
+        scans_count: scansCount,
         remaining_tickets: Number(book.remaining_tickets),
       });
     }
@@ -399,7 +530,9 @@ export const getDailySalesReport = async (req: AuthRequest, res: Response): Prom
 
     res.status(200).json({
       store_id: storeId,
-      date: dateParam,
+      range: reportRange.label,
+      start: startSql,
+      end: endSql,
       total_tickets_sold: totals.tickets,
       total_revenue: totals.revenue,
       breakdown,
