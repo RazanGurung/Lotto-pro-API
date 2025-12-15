@@ -453,56 +453,8 @@ export const scanTicket = async (
       console.warn('Failed to log scan event:', logError);
     }
 
-    if (scanLogId) {
-      let dailyTicketsSold = ticketsSoldThisScan;
-
-      try {
-        const bookDigitsPrefix = buildBookDigitsPrefix(
-          parsedScan,
-          master.lottery_number,
-          inventory.serial_number
-        );
-        if (bookDigitsPrefix) {
-          const prefixLength = bookDigitsPrefix.length;
-          const [dayRangeRows] = await pool.query(
-            `SELECT
-               MIN(ticket_number) as first_ticket,
-               MAX(ticket_number) as last_ticket
-             FROM SCANNED_TICKETS
-             WHERE store_id = ?
-               AND lottery_type_id = ?
-               AND DATE(scanned_at) = CURDATE()
-               AND LEFT(REPLACE(REPLACE(barcode_data, '-', ''), ' ', ''), ?) = ?`,
-            [store_id, master.lottery_id, prefixLength, bookDigitsPrefix]
-          );
-
-          const dayRange = (dayRangeRows as any[])[0];
-          const firstTicket = Number(dayRange?.first_ticket);
-          const lastTicket = Number(dayRange?.last_ticket);
-
-          if (
-            resolvedDirection &&
-            !isNaN(firstTicket) &&
-            !isNaN(lastTicket)
-          ) {
-            const rawSold =
-              resolvedDirection === 'asc'
-                ? lastTicket - firstTicket
-                : firstTicket - lastTicket;
-            dailyTicketsSold = Math.max(0, rawSold);
-          } else if (!resolvedDirection) {
-            dailyTicketsSold = 0;
-          }
-        }
-      } catch (rangeError) {
-        console.warn('Failed to compute daily ticket range:', rangeError);
-      }
-
-      if (dailyTicketsSold > totalTickets) {
-        dailyTicketsSold = totalTickets;
-      }
-
-      const dailySales = dailyTicketsSold * saleAmountPerTicket;
+    if (scanLogId && ticketsSoldThisScan > 0) {
+      const salesIncrement = ticketsSoldThisScan * saleAmountPerTicket;
 
       try {
         await pool.query(
@@ -511,16 +463,16 @@ export const scanTicket = async (
            VALUES (?, ?, ?, ?, CURDATE(), ?, ?)
            ON DUPLICATE KEY UPDATE
              scan_id = VALUES(scan_id),
-             tickets_sold = VALUES(tickets_sold),
-             total_sales = VALUES(total_sales),
+             tickets_sold = tickets_sold + VALUES(tickets_sold),
+             total_sales = total_sales + VALUES(total_sales),
              updated_at = CURRENT_TIMESTAMP`,
           [
             store_id,
             master.lottery_id,
             inventory.id,
             scanLogId,
-            dailyTicketsSold,
-            dailySales,
+            ticketsSoldThisScan,
+            salesIncrement,
           ]
         );
       } catch (reportError) {
