@@ -82,6 +82,9 @@ router.post(
         )
         .slice(-10);
     }
+    while (parsedHistory.length && parsedHistory[0].role !== 'user') {
+      parsedHistory.shift();
+    }
 
     let model;
     try {
