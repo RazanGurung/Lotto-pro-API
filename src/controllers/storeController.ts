@@ -375,9 +375,8 @@ export const getClerkStoreDashboard = async (
   res: Response
 ): Promise<void> => {
   try {
-    const requestedStoreId = parseInt(req.params.storeId);
-    const store = await authorizeStoreAccess(requestedStoreId, req.user);
-    const effectiveStoreId = store.store_id;
+    const storeId = parseInt(req.params.storeId);
+    const store = await authorizeStoreAccess(storeId, req.user);
 
     const [inventory] = await pool.query(
       `SELECT
@@ -395,7 +394,7 @@ export const getClerkStoreDashboard = async (
       LEFT JOIN LOTTERY_MASTER lm ON sli.lottery_id = lm.lottery_id
       WHERE sli.store_id = ?
       ORDER BY sli.updated_at DESC`,
-      [effectiveStoreId]
+      [storeId]
     );
 
     res.status(200).json({

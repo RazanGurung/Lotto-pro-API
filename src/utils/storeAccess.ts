@@ -41,17 +41,15 @@ export const authorizeStoreAccess = async (
   }
 
   if (user.role === 'store_account') {
-    const effectiveStoreId = user.id;
-    if (storeId && storeId !== effectiveStoreId) {
-      console.warn(
-        `Store account ${user.id} attempted to access store ${storeId}. Overriding to assigned store.`
-      );
+    if (user.id !== storeId) {
+      throw new StoreAccessError(403, 'Cannot access another store');
     }
+
     const [rows] = await pool.query(
       `SELECT store_id, owner_id, store_name, state
        FROM STORES
        WHERE store_id = ?`,
-      [effectiveStoreId]
+      [storeId]
     );
 
     if ((rows as any[]).length === 0) {
