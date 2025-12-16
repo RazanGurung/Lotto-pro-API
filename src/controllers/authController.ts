@@ -504,14 +504,7 @@ export const deleteStoreOwnerAccount = async (
 
       const inventoryIds = (inventories as any[]).map((item) => item.id);
 
-      if (inventoryIds.length > 0) {
-        const inventoryPlaceholders = inventoryIds.map(() => '?').join(', ');
-
-        await connection.query(
-          `DELETE FROM tickets WHERE inventory_id IN (${inventoryPlaceholders})`,
-          inventoryIds
-        );
-      }
+      // No additional cleanup per inventory needed currently
 
       await connection.query(
         `DELETE FROM STORE_LOTTERY_INVENTORY WHERE store_id IN (${storePlaceholders})`,
