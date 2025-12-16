@@ -10,6 +10,7 @@ import lotteryRoutes from './routes/lotteryRoutes';
 import scanRoutes from './routes/scanRoutes';
 import reportRoutes from './routes/reportRoutes';
 import superAdminRoutes from './routes/superAdminRoutes';
+import chatRoutes from './routes/chatRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -99,6 +100,7 @@ app.use('/api/lottery', lotteryRoutes);
 app.use('/api/lotteries', scanRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/super-admin', superAdminRoutes);
+app.use('/api/chat', chatRoutes);
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
