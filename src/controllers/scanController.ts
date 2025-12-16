@@ -464,7 +464,10 @@ export const scanTicket = async (
         ? (inventory.direction as DirectionValue)
         : undefined;
 
-    const scannedBy = req.user?.id ?? null;
+    const scannedBy =
+      req.user?.role === 'store_owner'
+        ? req.user.id
+        : storeAccessRecord.owner_id ?? null;
     let scanLogId: number | null = null;
 
     try {
