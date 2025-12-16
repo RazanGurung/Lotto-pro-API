@@ -95,7 +95,7 @@ const calculateTotalTickets = (
   startNumber: number,
   endNumber: number
 ): number => {
-  return Math.abs(endNumber - startNumber) + 1;
+  return Math.abs(endNumber - startNumber);
 };
 
 type DirectionValue = 'asc' | 'desc';
@@ -171,11 +171,14 @@ const computeRemainingInventory = (
   currentTicket: number,
   direction: DirectionValue | undefined
 ): number => {
-  if (!direction) return Math.max(endNumber - currentTicket, 0);
-  if (direction === 'asc') {
-    return Math.max(endNumber - currentTicket, 0);
+  const minTicket = Math.min(startNumber, endNumber);
+  const maxTicket = Math.max(startNumber, endNumber);
+
+  if (!direction || direction === 'asc') {
+    return Math.max(maxTicket - currentTicket, 0);
   }
-  return Math.max(currentTicket - startNumber, 0);
+
+  return Math.max(currentTicket - minTicket, 0);
 };
 
 const assertDirectionBounds = (
@@ -197,11 +200,9 @@ const assertDirectionBounds = (
 };
 
 const resolveStatus = (
-  remaining: number,
-  total: number
+  remaining: number
 ): 'inactive' | 'active' | 'finished' => {
   if (remaining <= 0) return 'finished';
-  if (remaining >= total) return 'inactive';
   return 'active';
 };
 
@@ -320,7 +321,7 @@ export const scanTicket = async (
         currentTicketNumber,
         directionInput
       );
-      const inventoryStatus = resolveStatus(remainingInventory, totalTickets);
+      const inventoryStatus = resolveStatus(remainingInventory);
       const [insertResult] = await pool.query(
         `INSERT INTO STORE_LOTTERY_INVENTORY
           (store_id, lottery_id, serial_number, total_count, current_count, status, direction)
@@ -421,7 +422,7 @@ export const scanTicket = async (
         directionToUse
       );
 
-      const inventoryStatus = resolveStatus(remainingInventory, totalTickets);
+      const inventoryStatus = resolveStatus(remainingInventory);
 
       await pool.query(
         `UPDATE STORE_LOTTERY_INVENTORY

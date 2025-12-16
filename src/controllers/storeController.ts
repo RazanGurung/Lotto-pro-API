@@ -8,11 +8,17 @@ import { hashPassword } from '../utils/auth';
 const STORE_REMAINING_SQL = `
   CASE
     WHEN sli.direction = 'desc' THEN LEAST(
-      GREATEST(sli.current_count - COALESCE(lm.start_number, 0), 0),
+      GREATEST(
+        sli.current_count - LEAST(COALESCE(lm.start_number, 0), COALESCE(lm.end_number, 0)),
+        0
+      ),
       sli.total_count
     )
     ELSE LEAST(
-      GREATEST(COALESCE(lm.end_number, 0) - sli.current_count, 0),
+      GREATEST(
+        GREATEST(COALESCE(lm.start_number, 0), COALESCE(lm.end_number, 0)) - sli.current_count,
+        0
+      ),
       sli.total_count
     )
   END
