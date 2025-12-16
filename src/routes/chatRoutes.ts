@@ -36,28 +36,19 @@ type ChatHistoryEntry = {
   content: string;
 };
 
-const MODEL_NAME = 'gemini-pro';
+const MODEL_NAME = 'gemini-1.5-flash';
 
-type GeminiModel = ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
-let cachedModel: GeminiModel | null = null;
-
-const getModel = (): GeminiModel => {
-  if (cachedModel) {
-    return cachedModel;
-  }
-
+const getModel = () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured');
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  cachedModel = genAI.getGenerativeModel({
+  return genAI.getGenerativeModel({
     model: MODEL_NAME,
     systemInstruction: SYSTEM_PROMPT,
   });
-
-  return cachedModel;
 };
 
 router.post(
@@ -72,15 +63,22 @@ router.post(
 
     let parsedHistory: ChatHistoryEntry[] = [];
     if (Array.isArray(history)) {
-      parsedHistory = history
-        .filter(
-          (entry): entry is ChatHistoryEntry =>
-            entry &&
-            typeof entry === 'object' &&
-            (entry.role === 'assistant' || entry.role === 'user') &&
-            typeof entry.content === 'string'
-        )
-        .slice(-10);
+      const sanitized: ChatHistoryEntry[] = [];
+      for (const entry of history) {
+        if (
+          entry &&
+          typeof entry === 'object' &&
+          (entry.role === 'assistant' || entry.role === 'user') &&
+          typeof entry.content === 'string' &&
+          entry.content.trim().length > 0
+        ) {
+          sanitized.push({
+            role: entry.role,
+            content: entry.content.trim(),
+          });
+        }
+      }
+      parsedHistory = sanitized.slice(-10);
     }
     while (parsedHistory.length && parsedHistory[0].role !== 'user') {
       parsedHistory.shift();
@@ -112,14 +110,22 @@ router.post(
       },
     });
 
-    const response = await chat.sendMessage(message);
-    const reply = response.response.text();
+    try {
+      const response = await chat.sendMessage(message);
+      const reply = response.response.text();
 
-    res.json({
-      success: true,
-      reply,
-      message: reply,
-    });
+      res.json({
+        success: true,
+        reply,
+        message: reply,
+      });
+    } catch (modelError) {
+      console.error('Gemini chat error:', modelError);
+      res.status(502).json({
+        success: false,
+        error: 'AI service temporarily unavailable. Please try again shortly.',
+      });
+    }
   })
 );
 
