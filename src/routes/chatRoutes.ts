@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
@@ -31,26 +30,6 @@ Personality:
 
 Keep responses conversational and under 3-4 sentences when possible.`;
 
-type ChatHistoryEntry = {
-  role: 'assistant' | 'user';
-  content: string;
-};
-
-const MODEL_NAME = 'gemini-1.5-flash-001';
-
-const getModel = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    systemInstruction: SYSTEM_PROMPT,
-  });
-};
-
 router.post(
   '/message',
   asyncHandler(async (req: Request, res: Response) => {
@@ -61,71 +40,94 @@ router.post(
       return;
     }
 
-    let parsedHistory: ChatHistoryEntry[] = [];
-    if (Array.isArray(history)) {
-      const sanitized: ChatHistoryEntry[] = [];
-      for (const entry of history) {
-        if (
-          entry &&
-          typeof entry === 'object' &&
-          (entry.role === 'assistant' || entry.role === 'user') &&
-          typeof entry.content === 'string' &&
-          entry.content.trim().length > 0
-        ) {
-          sanitized.push({
-            role: entry.role,
-            content: entry.content.trim(),
-          });
-        }
-      }
-      parsedHistory = sanitized.slice(-10);
-    }
-    while (parsedHistory.length && parsedHistory[0].role !== 'user') {
-      parsedHistory.shift();
-    }
-
-    let model;
-    try {
-      model = getModel();
-    } catch (configError) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       res.status(500).json({
         success: false,
-        error: (configError as Error).message || 'Gemini is not configured',
+        error: 'API key not configured',
       });
       return;
     }
 
-    const chatHistory = parsedHistory.map((entry) => ({
-      role: entry.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: entry.content }],
-    }));
+    type ChatHistoryEntry = {
+      role: 'assistant' | 'user';
+      content: string;
+    };
 
-    const chat = model.startChat({
-      history: chatHistory,
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 500,
-      },
-    });
+    const sanitizedHistory: ChatHistoryEntry[] = Array.isArray(history)
+      ? history
+          .filter(
+            (entry): entry is ChatHistoryEntry =>
+              entry &&
+              typeof entry === 'object' &&
+              (entry.role === 'assistant' || entry.role === 'user') &&
+              typeof entry.content === 'string' &&
+              entry.content.trim().length > 0
+          )
+          .slice(-4)
+      : [];
+
+    let prompt = `${SYSTEM_PROMPT}\n\n`;
+
+    if (sanitizedHistory.length) {
+      prompt += 'Previous conversation:\n';
+      for (const entry of sanitizedHistory) {
+        const speaker = entry.role === 'user' ? 'User' : 'Badda';
+        prompt += `${speaker}: ${entry.content.trim()}\n`;
+      }
+      prompt += '\n';
+    }
+
+    prompt += `User: ${message.trim()}\nBadda:`;
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    let reply = "I'm here to help! Could you please rephrase your question?";
 
     try {
-      const response = await chat.sendMessage(message);
-      const reply = response.response.text();
-
-      res.json({
-        success: true,
-        reply,
-        message: reply,
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 500,
+          },
+        }),
       });
-    } catch (modelError) {
-      console.error('Gemini chat error:', modelError);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Gemini API error:', data);
+        throw new Error(data.error?.message || 'Gemini API request failed');
+      }
+
+      const candidateText =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text || reply;
+      reply = candidateText.trim() || reply;
+    } catch (apiError) {
+      console.error('Chat Error:', apiError);
       res.status(502).json({
         success: false,
         error: 'AI service temporarily unavailable. Please try again shortly.',
+        details: (apiError as Error).message,
       });
+      return;
     }
+
+    res.json({
+      success: true,
+      reply,
+      message: reply,
+    });
   })
 );
 
