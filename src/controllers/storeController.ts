@@ -4,6 +4,10 @@ import { AuthRequest } from '../middleware/auth';
 import { CreateStoreRequest } from '../models/types';
 import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
 import { hashPassword } from '../utils/auth';
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  NOTIFICATION_SETTING_KEYS,
+} from '../constants/notificationSettings';
 
 const STORE_REMAINING_SQL = `
   CASE
@@ -165,6 +169,17 @@ export const createStore = async (
     );
 
     const storeId = (storeResult as any).insertId;
+
+    const settingColumns = ['store_id', ...NOTIFICATION_SETTING_KEYS];
+    const settingValues = [
+      storeId,
+      ...NOTIFICATION_SETTING_KEYS.map((key) => DEFAULT_NOTIFICATION_SETTINGS[key] ? 1 : 0),
+    ];
+    await pool.query(
+      `INSERT INTO STORE_NOTIFICATION_SETTINGS (${settingColumns.join(', ')})
+       VALUES (${settingColumns.map(() => '?').join(', ')})`,
+      settingValues
+    );
 
     const [stores] = await pool.query(
       `SELECT

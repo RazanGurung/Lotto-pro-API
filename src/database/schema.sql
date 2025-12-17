@@ -88,6 +88,24 @@ CREATE TABLE DAILY_REPORT (
     FOREIGN KEY(scan_id) REFERENCES SCANNED_TICKETS(id)
 );
 
+-- Store Notification Settings
+CREATE TABLE STORE_NOTIFICATION_SETTINGS (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    store_id INT NOT NULL UNIQUE,
+    push_notifications TINYINT(1) DEFAULT 1,
+    email_notifications TINYINT(1) DEFAULT 1,
+    sms_notifications TINYINT(1) DEFAULT 0,
+    low_stock_alerts TINYINT(1) DEFAULT 1,
+    sales_updates TINYINT(1) DEFAULT 1,
+    inventory_alerts TINYINT(1) DEFAULT 1,
+    system_updates TINYINT(1) DEFAULT 1,
+    weekly_reports TINYINT(1) DEFAULT 1,
+    daily_summary TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY(store_id) REFERENCES STORES(store_id) ON DELETE CASCADE
+);
+
 -- Owner Report View
 CREATE VIEW OWNER_REPORT AS
 SELECT

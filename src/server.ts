@@ -11,6 +11,7 @@ import scanRoutes from './routes/scanRoutes';
 import reportRoutes from './routes/reportRoutes';
 import superAdminRoutes from './routes/superAdminRoutes';
 import chatRoutes from './routes/chatRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -101,6 +102,7 @@ app.use('/api/lotteries', scanRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/settings', notificationRoutes);
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
@@ -196,6 +198,8 @@ const startServer = async () => {
       console.log('  GET    /api/lottery/clerk/store/:storeId/types');
       console.log('  POST   /api/lotteries/scan');
       console.log('  GET    /api/lotteries/scan/history/:storeId');
+      console.log('  GET    /api/settings/store/:storeId/notifications');
+      console.log('  PUT    /api/settings/store/:storeId/notifications');
       console.log('  GET    /api/reports/store/:storeId');
       console.log('  GET    /api/reports/store/:storeId/lottery/:lotteryTypeId');
       console.log('  GET    /api/reports/store/:storeId/analytics');

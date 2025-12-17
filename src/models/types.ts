@@ -175,3 +175,19 @@ export interface SuperAdminLottery {
   lottery_id: number;      // FK to LOTTERY_MASTER
   assigned_at: Date;
 }
+
+export interface StoreNotificationSettings {
+  id: number;
+  store_id: number;
+  push_notifications: boolean;
+  email_notifications: boolean;
+  sms_notifications: boolean;
+  low_stock_alerts: boolean;
+  sales_updates: boolean;
+  inventory_alerts: boolean;
+  system_updates: boolean;
+  weekly_reports: boolean;
+  daily_summary: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
