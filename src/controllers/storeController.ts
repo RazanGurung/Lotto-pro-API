@@ -177,16 +177,20 @@ export const createStore = async (
 
     const storeId = (storeResult as any).insertId;
 
-    const settingColumns = ['store_id', ...NOTIFICATION_SETTING_KEYS];
-    const settingValues = [
-      storeId,
-      ...NOTIFICATION_SETTING_KEYS.map((key) => DEFAULT_NOTIFICATION_SETTINGS[key] ? 1 : 0),
-    ];
-    await pool.query(
-      `INSERT INTO STORE_NOTIFICATION_SETTINGS (${settingColumns.join(', ')})
-       VALUES (${settingColumns.map(() => '?').join(', ')})`,
-      settingValues
-    );
+    if (!storeCountForOwner) {
+      const settingColumns = ['owner_id', ...NOTIFICATION_SETTING_KEYS];
+      const settingValues = [
+        userId,
+        ...NOTIFICATION_SETTING_KEYS.map((key) =>
+          DEFAULT_NOTIFICATION_SETTINGS[key] ? 1 : 0
+        ),
+      ];
+      await pool.query(
+        `INSERT INTO STORE_NOTIFICATION_SETTINGS (${settingColumns.join(', ')})
+         VALUES (${settingColumns.map(() => '?').join(', ')})`,
+        settingValues
+      );
+    }
 
     const [stores] = await pool.query(
       `SELECT
