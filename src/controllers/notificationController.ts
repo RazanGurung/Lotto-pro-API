@@ -8,7 +8,7 @@ import {
   NotificationSettingKey,
 } from '../constants/notificationSettings';
 
-type RawSettingsRow = Record<NotificationSettingKey | 'id' | 'store_id', number | boolean | Date>;
+type RawSettingsRow = Record<NotificationSettingKey | 'id' | 'owner_id', number | boolean | Date>;
 
 const SETTINGS_TABLE = 'STORE_NOTIFICATION_SETTINGS';
 
@@ -25,19 +25,19 @@ const normalizeSettingsRow = (row: RawSettingsRow) => {
   return normalized;
 };
 
-const ensureStoreSettings = async (storeId: number): Promise<any> => {
+const ensureOwnerSettings = async (ownerId: number): Promise<any> => {
   const [existing] = await pool.query(
-    `SELECT * FROM ${SETTINGS_TABLE} WHERE store_id = ?`,
-    [storeId]
+    `SELECT * FROM ${SETTINGS_TABLE} WHERE owner_id = ?`,
+    [ownerId]
   );
 
   if ((existing as any[]).length > 0) {
     return normalizeSettingsRow((existing as any[])[0]);
   }
 
-  const columns = ['store_id', ...NOTIFICATION_SETTING_KEYS];
+  const columns = ['owner_id', ...NOTIFICATION_SETTING_KEYS];
   const values = [
-    storeId,
+    ownerId,
     ...NOTIFICATION_SETTING_KEYS.map((key) =>
       DEFAULT_NOTIFICATION_SETTINGS[key] ? 1 : 0
     ),
@@ -51,8 +51,8 @@ const ensureStoreSettings = async (storeId: number): Promise<any> => {
   );
 
   const [created] = await pool.query(
-    `SELECT * FROM ${SETTINGS_TABLE} WHERE store_id = ?`,
-    [storeId]
+    `SELECT * FROM ${SETTINGS_TABLE} WHERE owner_id = ?`,
+    [ownerId]
   );
 
   return normalizeSettingsRow((created as any[])[0]);
@@ -67,10 +67,10 @@ export const getNotificationSettings = async (req: AuthRequest, res: Response): 
     }
 
     const storeRecord = await authorizeStoreAccess(storeId, req.user);
-    const settings = await ensureStoreSettings(storeRecord.store_id);
+    const settings = await ensureOwnerSettings(storeRecord.owner_id);
 
     res.status(200).json({
-      store_id: storeRecord.store_id,
+      owner_id: storeRecord.owner_id,
       settings,
     });
   } catch (error) {
@@ -127,14 +127,14 @@ export const updateNotificationSettings = async (req: AuthRequest, res: Response
     await pool.query(
       `UPDATE ${SETTINGS_TABLE}
        SET ${setClause}, updated_at = CURRENT_TIMESTAMP
-       WHERE store_id = ?`,
-      [...values, storeRecord.store_id]
+       WHERE owner_id = ?`,
+      [...values, storeRecord.owner_id]
     );
 
-    const updatedSettings = await ensureStoreSettings(storeRecord.store_id);
+    const updatedSettings = await ensureOwnerSettings(storeRecord.owner_id);
 
     res.status(200).json({
-      store_id: storeRecord.store_id,
+      owner_id: storeRecord.owner_id,
       settings: updatedSettings,
       message: 'Notification settings updated successfully',
     });

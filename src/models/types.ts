@@ -182,7 +182,7 @@ export interface SuperAdminLottery {
 
 export interface StoreNotificationSettings {
   id: number;
-  store_id: number;
+  owner_id: number;
   push_notifications: boolean;
   email_notifications: boolean;
   sms_notifications: boolean;
