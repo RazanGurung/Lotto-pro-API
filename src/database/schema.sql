@@ -41,14 +41,18 @@ CREATE TABLE STORE_OWNER (
 );
 
 -- Store Table
-CREATE TABLE STORE (
+CREATE TABLE STORES (
     store_id INT PRIMARY KEY AUTO_INCREMENT,
     owner_id INT NOT NULL,
     store_name VARCHAR(100) NOT NULL,
     address VARCHAR(255),
-    contact_number VARCHAR(20),
-    login_email VARCHAR(100) UNIQUE NOT NULL,
-    login_password VARCHAR(255) NOT NULL,
+    city VARCHAR(100),
+    state VARCHAR(50),
+    zipcode VARCHAR(20),
+    is_24_hours TINYINT(1) DEFAULT 0,
+    closing_time TIME NULL,
+    lottery_ac_no VARCHAR(50) UNIQUE NOT NULL,
+    lottery_pw VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(owner_id) REFERENCES STORE_OWNER(owner_id)
 );

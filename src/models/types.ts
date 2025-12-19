@@ -20,6 +20,8 @@ export interface Store {
   zipcode?: string;
   lottery_ac_no: string;
   lottery_pw: string;
+  is_24_hours?: boolean;
+  closing_time?: string | null;
   created_at: Date;
   updated_at?: Date;
 }
@@ -115,6 +117,8 @@ export interface CreateStoreRequest {
   city?: string;
   state?: string;
   zipcode?: string;
+  is_24_hours?: boolean;
+  closing_time?: string;
   lottery_ac_no: string;
   lottery_pw: string;
 }

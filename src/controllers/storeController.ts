@@ -117,6 +117,8 @@ export const createStore = async (
       city,
       state,
       zipcode,
+      is_24_hours,
+      closing_time,
       lottery_ac_no,
       lottery_pw,
     }: CreateStoreRequest = req.body;
@@ -154,8 +156,8 @@ export const createStore = async (
 
     const [storeResult] = await pool.query(
       `INSERT INTO STORES
-        (owner_id, store_name, address, city, state, zipcode, lottery_ac_no, lottery_pw)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (owner_id, store_name, address, city, state, zipcode, is_24_hours, closing_time, lottery_ac_no, lottery_pw)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
         store_name,
@@ -163,6 +165,8 @@ export const createStore = async (
         city || null,
         state || null,
         zipcode || null,
+        is_24_hours ? 1 : 0,
+        closing_time || null,
         lottery_ac_no,
         hashedLotteryPassword,
       ]
@@ -191,6 +195,8 @@ export const createStore = async (
         state,
         zipcode,
         lottery_ac_no,
+        is_24_hours,
+        closing_time,
         created_at
       FROM STORES WHERE store_id = ?`,
       [storeId]
