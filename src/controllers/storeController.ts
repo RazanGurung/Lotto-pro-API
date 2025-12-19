@@ -157,7 +157,7 @@ export const createStore = async (
     const [storeResult] = await pool.query(
       `INSERT INTO STORES
         (owner_id, store_name, address, city, state, zipcode, is_24_hours, closing_time, lottery_ac_no, lottery_pw)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
         store_name,
