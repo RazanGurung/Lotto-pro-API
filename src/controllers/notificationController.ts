@@ -2,61 +2,10 @@ import { Response } from 'express';
 import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
-import {
-  DEFAULT_NOTIFICATION_SETTINGS,
-  NOTIFICATION_SETTING_KEYS,
-  NotificationSettingKey,
-} from '../constants/notificationSettings';
-
-type RawSettingsRow = Record<NotificationSettingKey | 'id' | 'owner_id', number | boolean | Date>;
+import { NOTIFICATION_SETTING_KEYS, NotificationSettingKey } from '../constants/notificationSettings';
+import { ensureOwnerSettings } from '../services/notificationService';
 
 const SETTINGS_TABLE = 'STORE_NOTIFICATION_SETTINGS';
-
-const normalizeSettingsRow = (row: RawSettingsRow) => {
-  const normalized: Record<string, boolean | number | Date> = {};
-  for (const key of Object.keys(row)) {
-    const value = row[key as keyof RawSettingsRow];
-    if (typeof value === 'number' && NOTIFICATION_SETTING_KEYS.includes(key as NotificationSettingKey)) {
-      normalized[key] = value === 1;
-    } else {
-      normalized[key] = value;
-    }
-  }
-  return normalized;
-};
-
-const ensureOwnerSettings = async (ownerId: number): Promise<any> => {
-  const [existing] = await pool.query(
-    `SELECT * FROM ${SETTINGS_TABLE} WHERE owner_id = ?`,
-    [ownerId]
-  );
-
-  if ((existing as any[]).length > 0) {
-    return normalizeSettingsRow((existing as any[])[0]);
-  }
-
-  const columns = ['owner_id', ...NOTIFICATION_SETTING_KEYS];
-  const values = [
-    ownerId,
-    ...NOTIFICATION_SETTING_KEYS.map((key) =>
-      DEFAULT_NOTIFICATION_SETTINGS[key] ? 1 : 0
-    ),
-  ];
-
-  const placeholders = columns.map(() => '?').join(', ');
-
-  await pool.query(
-    `INSERT INTO ${SETTINGS_TABLE} (${columns.join(', ')}) VALUES (${placeholders})`,
-    values
-  );
-
-  const [created] = await pool.query(
-    `SELECT * FROM ${SETTINGS_TABLE} WHERE owner_id = ?`,
-    [ownerId]
-  );
-
-  return normalizeSettingsRow((created as any[])[0]);
-};
 
 export const getNotificationSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   try {

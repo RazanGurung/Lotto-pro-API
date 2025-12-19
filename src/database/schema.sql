@@ -110,6 +110,22 @@ CREATE TABLE STORE_NOTIFICATION_SETTINGS (
     FOREIGN KEY(owner_id) REFERENCES STORE_OWNER(owner_id) ON DELETE CASCADE
 );
 
+CREATE TABLE STORE_NOTIFICATIONS (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    owner_id INT NOT NULL,
+    store_id INT NOT NULL,
+    notification_type ENUM('low_stock','inventory_alert','sales_update','system') NOT NULL,
+    title VARCHAR(150),
+    message TEXT NOT NULL,
+    metadata JSON NULL,
+    is_read TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(owner_id) REFERENCES STORE_OWNER(owner_id) ON DELETE CASCADE,
+    FOREIGN KEY(store_id) REFERENCES STORES(store_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_store_notifications_owner ON STORE_NOTIFICATIONS (owner_id, is_read, created_at);
+
 -- Owner Report View
 CREATE VIEW OWNER_REPORT AS
 SELECT

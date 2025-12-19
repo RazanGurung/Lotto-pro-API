@@ -3,6 +3,7 @@ import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { ScanTicketRequest } from '../models/types';
 import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
+import { createOwnerNotification } from '../services/notificationService';
 
 interface ParsedScanPayload {
   lotteryNumber: string;
@@ -210,6 +211,8 @@ const resolveStatus = (
   if (remaining <= 0) return 'finished';
   return 'active';
 };
+
+const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD ?? '5');
 
 export const scanTicket = async (
   req: AuthRequest,
@@ -524,6 +527,26 @@ export const scanTicket = async (
           currentTicketValue,
           resolvedDirection
         );
+
+    if (
+      storeOwnerId &&
+      remainingTickets !== null &&
+      remainingTickets <= LOW_STOCK_THRESHOLD
+    ) {
+      await createOwnerNotification({
+        ownerId: storeOwnerId,
+        storeId: targetStoreId,
+        type: 'low_stock',
+        title: 'Low lottery inventory',
+        message: `Store ${storeAccessRecord.store_name} has only ${remainingTickets} tickets remaining for ${master.lottery_name}.`,
+        metadata: {
+          inventory_id: inventory.id,
+          lottery_id: master.lottery_id,
+          remaining_tickets: remainingTickets,
+          serial_number: inventory.serial_number,
+        },
+      });
+    }
 
     res.status(200).json({
       status: 'ok',

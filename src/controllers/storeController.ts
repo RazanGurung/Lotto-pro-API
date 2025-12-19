@@ -5,10 +5,7 @@ import { CreateStoreRequest } from '../models/types';
 import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
 import { hashPassword } from '../utils/auth';
 import { hashLotteryAccountNumber } from '../utils/lotteryAccount';
-import {
-  DEFAULT_NOTIFICATION_SETTINGS,
-  NOTIFICATION_SETTING_KEYS,
-} from '../constants/notificationSettings';
+import { ensureOwnerSettings } from '../services/notificationService';
 
 const STORE_REMAINING_SQL = `
   CASE
@@ -178,24 +175,7 @@ export const createStore = async (
     const storeId = (storeResult as any).insertId;
 
     if (userId) {
-      const [ownerSettings] = await pool.query(
-        'SELECT id FROM STORE_NOTIFICATION_SETTINGS WHERE owner_id = ?',
-        [userId]
-      );
-      if ((ownerSettings as any[]).length === 0) {
-        const settingColumns = ['owner_id', ...NOTIFICATION_SETTING_KEYS];
-        const settingValues = [
-          userId,
-          ...NOTIFICATION_SETTING_KEYS.map((key) =>
-            DEFAULT_NOTIFICATION_SETTINGS[key] ? 1 : 0
-          ),
-        ];
-        await pool.query(
-          `INSERT INTO STORE_NOTIFICATION_SETTINGS (${settingColumns.join(', ')})
-           VALUES (${settingColumns.map(() => '?').join(', ')})`,
-          settingValues
-        );
-      }
+      await ensureOwnerSettings(userId);
     }
 
     const [stores] = await pool.query(
