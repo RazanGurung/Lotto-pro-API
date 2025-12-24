@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { ScanTicketRequest } from '../models/types';
 import { authorizeStoreAccess, StoreAccessError } from '../utils/storeAccess';
 import { createOwnerNotification } from '../services/notificationService';
+import { normalizeLotteryNumber } from '../utils/lottery';
 
 interface ParsedScanPayload {
   lotteryNumber: string;
@@ -240,6 +241,8 @@ export const scanTicket = async (
       return;
     }
 
+    const normalizedLotteryNumber = normalizeLotteryNumber(parsedScan.lotteryNumber);
+
     let directionInput: DirectionValue | undefined;
     try {
       directionInput = parseDirectionInput(req.body.direction);
@@ -248,11 +251,22 @@ export const scanTicket = async (
       return;
     }
 
-    const [lotteryRows] = await pool.query(
+    const rawLotteryNumber = (parsedScan.lotteryNumber || '').trim();
+    const fallbackLotteryNumber = rawLotteryNumber.replace(/\D/g, '') || rawLotteryNumber;
+
+    let [lotteryRows] = await pool.query(
       `SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url
        FROM LOTTERY_MASTER WHERE lottery_number = ?`,
-      [parsedScan.lotteryNumber]
+      [normalizedLotteryNumber]
     );
+
+    if ((lotteryRows as any[]).length === 0 && fallbackLotteryNumber !== normalizedLotteryNumber) {
+      [lotteryRows] = await pool.query(
+        `SELECT lottery_id, lottery_name, lottery_number, price, launch_date, state, start_number, end_number, status, image_url
+         FROM LOTTERY_MASTER WHERE lottery_number = ?`,
+        [fallbackLotteryNumber]
+      );
+    }
 
     if ((lotteryRows as any[]).length === 0) {
       res.status(200).json({

@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { pool } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { LotteryStatus } from '../models/types';
+import { normalizeLotteryNumber } from '../utils/lottery';
 
 const LOTTERY_TABLE = 'LOTTERY_MASTER';
 const ASSIGN_TABLE = 'SUPER_ADMIN_LOTTERY';
@@ -96,12 +97,13 @@ const validateLotteryPayload = (body: any): {
     return { valid: false, errors: 'lottery_name is required' };
   }
 
-  if (
-    !lottery_number ||
-    typeof lottery_number !== 'string' ||
-    !/^\d{3}$/.test(lottery_number.trim())
-  ) {
-    return { valid: false, errors: 'lottery_number must be a 3-digit string' };
+  if (!lottery_number || typeof lottery_number !== 'string') {
+    return { valid: false, errors: 'lottery_number is required' };
+  }
+
+  const normalizedLotteryNumber = normalizeLotteryNumber(lottery_number);
+  if (!/^\d{3}$/.test(normalizedLotteryNumber)) {
+    return { valid: false, errors: 'lottery_number must contain up to 3 digits' };
   }
 
   if (price === undefined || isNaN(Number(price)) || Number(price) <= 0) {
@@ -153,7 +155,7 @@ const validateLotteryPayload = (body: any): {
     valid: true,
     data: {
       lottery_name: lottery_name.trim(),
-      lottery_number: lottery_number.trim(),
+    lottery_number: normalizedLotteryNumber,
       price: Number(price),
       launch_date: normalizedLaunchDate,
       state: normalizedState,
