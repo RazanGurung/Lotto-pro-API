@@ -229,6 +229,7 @@ export const scanTicket = async (
     const storeAccessRecord = await authorizeStoreAccess(store_id, req.user);
     const targetStoreId = storeAccessRecord.store_id;
     const storeOwnerId = storeAccessRecord.owner_id;
+    const scanMode = (req.body.scan_mode || 'day').toLowerCase() === 'stock' ? 'stock' : 'day';
 
     let parsedScan: ParsedScanPayload;
 
@@ -434,28 +435,33 @@ export const scanTicket = async (
 
       const inventoryStatus = resolveStatus(remainingInventory);
 
-      await pool.query(
-        `UPDATE STORE_LOTTERY_INVENTORY
-         SET total_count = ?,
-             current_count = ?,
-             status = ?,
-             direction = ?,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [
-          totalTickets,
-          currentTicketNumber,
-          inventoryStatus,
-          directionToUse,
-          currentInventory.id,
-        ]
-      );
+      if (scanMode === 'day') {
+        await pool.query(
+          `UPDATE STORE_LOTTERY_INVENTORY
+           SET total_count = ?,
+               current_count = ?,
+               status = ?,
+               direction = ?,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [
+            totalTickets,
+            currentTicketNumber,
+            inventoryStatus,
+            directionToUse,
+            currentInventory.id,
+          ]
+        );
 
-      const [updatedInventory] = await pool.query(
-        'SELECT * FROM STORE_LOTTERY_INVENTORY WHERE id = ?',
-        [currentInventory.id]
-      );
-      inventoryRecord = (updatedInventory as any[])[0];
+        const [updatedInventory] = await pool.query(
+          'SELECT * FROM STORE_LOTTERY_INVENTORY WHERE id = ?',
+          [currentInventory.id]
+        );
+        inventoryRecord = (updatedInventory as any[])[0];
+      } else {
+        inventoryRecord = currentInventory;
+        ticketsSoldThisScan = 0;
+      }
     }
 
     const inventory = inventoryRecord;
@@ -476,14 +482,15 @@ export const scanTicket = async (
 
     try {
       const [scanResult] = await pool.query(
-        `INSERT INTO SCANNED_TICKETS (store_id, barcode_data, lottery_type_id, ticket_number, scanned_by)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO SCANNED_TICKETS (store_id, barcode_data, lottery_type_id, ticket_number, scanned_by, scan_mode)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           targetStoreId,
           parsedScan.raw,
           master.lottery_id,
           parsedScan.packNumber,
           scannedBy,
+          scanMode,
         ]
       );
       scanLogId = (scanResult as any).insertId;
@@ -491,7 +498,7 @@ export const scanTicket = async (
       console.warn('Failed to log scan event:', logError);
     }
 
-    if (scanLogId && ticketsSoldThisScan > 0) {
+    if (scanMode === 'day' && scanLogId && ticketsSoldThisScan > 0) {
       const salesIncrement = ticketsSoldThisScan * saleAmountPerTicket;
 
       try {
@@ -551,6 +558,7 @@ export const scanTicket = async (
     res.status(200).json({
       status: 'ok',
       game_active: true,
+      scan_mode: scanMode,
       lottery_master: {
         lottery_number: master.lottery_number,
         lottery_name: master.lottery_name,
@@ -576,6 +584,15 @@ export const scanTicket = async (
         status: inventory.status,
         updated_at: inventory.updated_at,
       },
+      stock_snapshot:
+        scanMode === 'stock'
+          ? {
+              observed_ticket: currentTicketNumber,
+              difference_vs_inventory:
+                currentTicketNumber - Number(inventory.current_count || 0),
+              serial_number: inventory.serial_number,
+            }
+          : undefined,
     });
   } catch (error) {
     if (error instanceof StoreAccessError) {
@@ -608,7 +625,8 @@ export const getScanHistory = async (
           WHEN so.owner_id IS NOT NULL THEN 'store_owner'
           WHEN sc.store_id IS NOT NULL THEN 'store_account'
           ELSE NULL
-        END as scanned_by_role
+        END as scanned_by_role,
+        st.scan_mode
       FROM SCANNED_TICKETS st
       LEFT JOIN LOTTERY_MASTER lm ON st.lottery_type_id = lm.lottery_id
       LEFT JOIN STORE_OWNER so ON st.scanned_by = so.owner_id
@@ -619,7 +637,9 @@ export const getScanHistory = async (
       [storeId, limit]
     );
 
-    res.status(200).json({ scanHistory: result });
+    res.status(200).json({
+      scanHistory: result,
+    });
   } catch (error) {
     if (error instanceof StoreAccessError) {
       res.status(error.status).json({ error: error.message });
